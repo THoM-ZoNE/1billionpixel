@@ -1,0 +1,121 @@
+import { FastifyPluginAsync } from "fastify";
+import { z } from "zod";
+import { prisma }               from "@1bp/database";
+import { syncWalletBalance }    from "../services/solana.js";
+import { checkAreaAvailable }   from "../services/canvas.js";
+import { getAdjacentFreeSpaces }from "../services/adjacency.js";
+import { verifySignature }      from "../lib/auth.js";
+import { broadcastCanvasUpdate }from "../lib/websocket.js";
+import { CANVAS_W, CANVAS_H, MIN_AREA_SIZE } from "@1bp/shared";
+
+const ClaimSchema = z.object({
+  walletAddress: z.string().length(44),
+  x:      z.number().int().min(0).max(CANVAS_W),
+  y:      z.number().int().min(0).max(CANVAS_H),
+  width:  z.number().int().min(10).max(CANVAS_W),
+  height: z.number().int().min(10).max(CANVAS_H),
+  signature: z.string().optional(),
+  message:   z.string().optional(),
+});
+
+const pixelRoutes: FastifyPluginAsync = async (app) => {
+
+  app.post("/claim", async (req, reply) => {
+  const body = ClaimSchema.parse(req.body);
+
+  // 1. Verify wallet ownership — skipSignature esetén átugorjuk
+  const walletForSigCheck = await prisma.wallet.findUnique({
+    where: { address: body.walletAddress },
+    select: { skipSignature: true },
+  });
+
+  const shouldSkipSignature = walletForSigCheck?.skipSignature === true;
+
+  if (!shouldSkipSignature) {
+  if (!body.message || !body.signature) {
+    return reply.status(400).send({ error: "message and signature required" });
+  }
+    const valid = verifySignature(body.walletAddress, body.message, body.signature);
+    if (!valid) return reply.status(401).send({ error: "Invalid signature" });
+  }
+
+  // 2. Sync on-chain balance
+  const wallet = await syncWalletBalance(body.walletAddress);
+
+  // 3. Check quota
+  const requestedPixels = BigInt(body.width) * BigInt(body.height);
+  const availableQuota = BigInt(wallet.availableQuota ?? 0);
+
+  if (availableQuota < requestedPixels) {
+    return reply.status(400).send({
+      error: "Insufficient pixel quota",
+      available: availableQuota.toString(),
+      requested: requestedPixels.toString(),
+    });
+  }
+
+  // 4. Check area availability
+  const isAvailable = await checkAreaAvailable(body.x, body.y, body.width, body.height);
+  if (!isAvailable) return reply.status(409).send({ error: "Area already occupied" });
+
+  // 5. Create area in DB
+  const area = await prisma.$transaction(async (tx) => {
+    const newArea = await tx.pixelArea.create({
+      data: {
+        walletAddress: body.walletAddress,
+        x: body.x, y: body.y,
+        width: body.width, height: body.height,
+        pixelCount: requestedPixels,
+        status: "ACTIVE",
+      },
+    });
+
+    await tx.wallet.update({
+      where: { address: body.walletAddress },
+      data: {
+        lockedPixels:   { increment: requestedPixels },
+        availableQuota: { decrement: requestedPixels },
+      },
+    });
+
+    return newArea;
+  });
+
+  // 6. Broadcast WebSocket update
+  broadcastCanvasUpdate({ type: "AREA_CLAIMED", area });
+
+  return reply.status(201).send(area);
+});
+
+  // DELETE /api/pixel/:areaId  — release an area (user initiated)
+  app.delete<{ Params: { id: string } }>("/:id", async (req, reply) => {
+    const { walletAddress, signature, message } = z.object({
+      walletAddress: z.string(),
+      signature:     z.string(),
+      message:       z.string(),
+    }).parse(req.body);
+
+    const valid = verifySignature(walletAddress, message, signature);
+    if (!valid) return reply.status(401).send({ error: "Invalid signature" });
+
+    const area = await prisma.pixelArea.findUnique({ where: { id: req.params.id } });
+    if (!area || area.walletAddress !== walletAddress)
+      return reply.status(404).send({ error: "Area not found" });
+
+    await prisma.$transaction([
+      prisma.pixelArea.update({ where: { id: area.id }, data: { status: "RELEASED" } }),
+      prisma.wallet.update({
+        where: { address: walletAddress },
+        data: {
+          lockedPixels:   { decrement: area.pixelCount },
+          availableQuota: { increment: area.pixelCount },
+        },
+      }),
+    ]);
+
+    broadcastCanvasUpdate({ type: "AREA_RELEASED", areaId: area.id, x: area.x, y: area.y, width: area.width, height: area.height });
+    return reply.send({ ok: true });
+  });
+};
+
+export { pixelRoutes };

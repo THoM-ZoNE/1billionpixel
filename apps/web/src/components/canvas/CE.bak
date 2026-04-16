@@ -1,0 +1,163 @@
+"use client";
+import { useEffect, useRef, useCallback, useState } from "react";
+import { Stage, Layer, Rect, Image as KImage } from "react-konva";
+import Konva from "konva";
+import useImage from "use-image";
+import { useCanvasStore } from "@/store/canvasStore";
+import { api } from "@/lib/api";
+import { onCanvasEvent, connectWebSocket } from "@/lib/websocket";
+import { CanvasRegion, CANVAS_WIDTH, CANVAS_HEIGHT } from "@1bp/shared";
+
+export function CanvasExplorer({ onRegionSelect }: { onRegionSelect: (r: CanvasRegion) => void }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<Konva.Stage>(null);
+  const [stageSize, setStageSize] = useState({ w: 800, h: 500 });
+
+  const { areas, setAreas, addArea, removeArea } = useCanvasStore();
+
+  // Reszponzív méret – ResizeObserver figyeli a container szélességét
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => {
+      const w = el.clientWidth;
+      const h = Math.round(w * (25000 / 40000));
+      setStageSize({ w, h });
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const loadAreas = useCallback(async () => {
+    const s = stageRef.current;
+    if (!s) return;
+    const scale = s.scaleX();
+    const pos = s.position();
+    const vx = Math.max(0, -pos.x / scale);
+    const vy = Math.max(0, -pos.y / scale);
+    const vw = Math.min(stageSize.w / scale, CANVAS_WIDTH);
+    const vh = Math.min(stageSize.h / scale, CANVAS_HEIGHT);
+
+    const data = await api.get<any[]>(
+      `/canvas/areas?x=${Math.floor(vx)}&y=${Math.floor(vy)}&w=${Math.ceil(vw)}&h=${Math.ceil(vh)}`
+    );
+    setAreas(data);
+  }, [setAreas, stageSize]);
+
+  useEffect(() => {
+  const container = containerRef.current;
+  if (!container) return;
+
+  const handleWheel = (e: WheelEvent) => {
+    e.preventDefault();
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    const oldScale = stage.scaleX();
+    const pointer  = stage.getPointerPosition();
+    if (!pointer) return;
+
+    const newScale = Math.max(0.05, Math.min(50,
+      oldScale * (e.deltaY > 0 ? 0.9 : 1.1)
+    ));
+
+    // Zoom a kurzor pozíciójára
+    const mousePointTo = {
+      x: (pointer.x - stage.x()) / oldScale,
+      y: (pointer.y - stage.y()) / oldScale,
+    };
+
+    stage.scale({ x: newScale, y: newScale });
+    stage.position({
+      x: pointer.x - mousePointTo.x * newScale,
+      y: pointer.y - mousePointTo.y * newScale,
+    });
+
+    loadAreas();
+  };
+
+  container.addEventListener("wheel", handleWheel, { passive: false });
+  return () => container.removeEventListener("wheel", handleWheel);
+}, [loadAreas]);
+
+  const handleClick = (e: Konva.KonvaEventObject<MouseEvent>) => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const pos   = stage.getPointerPosition()!;
+    const scale = stage.scaleX();
+    const stPos = stage.position();
+    const rx = Math.floor((pos.x - stPos.x) / scale);
+    const ry = Math.floor((pos.y - stPos.y) / scale);
+    onRegionSelect({ x: rx, y: ry, width: 100, height: 100 });
+  };
+
+  return (
+    <div
+      ref={containerRef}
+      style={{
+        width: "100%",
+        border: "1px solid rgba(255,255,255,0.1)",
+        borderRadius: "0.75rem",
+        overflow: "hidden",
+        background: "#060f06",   /* sötétzöld alap = szabad terület */
+      }}
+    >
+      <Stage
+        ref={stageRef}
+        width={stageSize.w}
+        height={stageSize.h}
+        draggable
+        onDragEnd={loadAreas}
+        onClick={handleClick}
+        style={{ cursor: "crosshair", display: "block" }}
+      >
+        <Layer>
+          {/* Háttér – szabad területek zöldes tintával */}
+          <Rect
+            x={0} y={0}
+            width={CANVAS_WIDTH} height={CANVAS_HEIGHT}
+            fill="#0a1a0a"
+          />
+
+          {/* Foglalt területek */}
+          {areas.map((area) => (
+            <AreaRect key={area.id} area={area} />
+          ))}
+        </Layer>
+      </Stage>
+
+      <div style={{
+        padding: "0.5rem",
+        fontSize: "0.7rem",
+        color: "rgba(255,255,255,0.3)",
+        textAlign: "center",
+        display: "flex",
+        justifyContent: "center",
+        gap: "1.5rem",
+      }}>
+        <span>🟢 Available</span>
+        <span>🔴 Claimed</span>
+        <span>🟡 At Risk</span>
+        <span style={{ opacity: 0.5 }}>Scroll = zoom · Drag = pan · Click = select</span>
+      </div>
+    </div>
+  );
+}
+
+function AreaRect({ area }: { area: any }) {
+  const [img] = useImage(area.imageUrl ?? "");
+
+  // Szín logika: kép van → kép; AT_RISK → sárga; CLAIMED → piros
+  const fill   = area.status === "AT_RISK" ? "rgba(245,158,11,0.35)" : "rgba(220,38,38,0.45)";
+  const stroke = area.status === "AT_RISK" ? "#f59e0b" : "#ef4444";
+
+  return (
+    <>
+      {img
+        ? <KImage image={img} x={area.x} y={area.y} width={area.width} height={area.height} />
+        : <Rect x={area.x} y={area.y} width={area.width} height={area.height}
+                fill={fill} stroke={stroke} strokeWidth={1} />
+      }
+    </>
+  );
+}

@@ -1,0 +1,42 @@
+"use client";
+import { useWallet }      from "@solana/wallet-adapter-react";
+import { useWalletStore } from "@/store/walletStore";
+import { CanvasExplorer } from "@/components/canvas/CanvasExplorer";
+import { ClaimModal }     from "@/components/pixel/ClaimModal";
+import { useState }       from "react";
+import { CanvasRegion }   from "@1bp/shared";
+
+export function ClaimSection() {
+  const { connected }  = useWallet();
+  const { walletData } = useWalletStore();
+  const [selectedRegion, setSelectedRegion] = useState<CanvasRegion | null>(null);
+
+  if (!connected) return null;
+
+  return (
+    <section className="py-16 px-4" id="canvas">
+      <div className="max-w-7xl mx-auto">
+        <h2 className="font-pixel text-xl mb-4 text-center">The Canvas</h2>
+        {walletData && (
+          <p className="text-center text-sm text-gray-400 mb-8">
+            You have{" "}
+            <span className="text-brand font-bold">
+              {Number(walletData.availableQuota).toLocaleString()}
+            </span>{" "}
+            pixels available to claim
+          </p>
+        )}
+
+        <CanvasExplorer onRegionSelect={setSelectedRegion} />
+
+        {selectedRegion && walletData && (
+          <ClaimModal
+            region={selectedRegion}
+            availableQuota={Number(walletData.availableQuota)}
+            onClose={() => setSelectedRegion(null)}
+          />
+        )}
+      </div>
+    </section>
+  );
+}

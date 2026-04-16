@@ -1,0 +1,20 @@
+{
+  "name": "@1bp/database",
+  "version": "1.0.0",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+},
+  "scripts": {
+    "db:push":    "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:generate":"prisma generate",
+    "db:studio":  "prisma studio"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.13.0"
+  },
+  "devDependencies": {
+    "prisma": "^5.13.0"
+  }
+}

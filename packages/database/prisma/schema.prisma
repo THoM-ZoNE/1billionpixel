@@ -1,0 +1,93 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Wallet {
+  address          String        @id
+  totalQuota       BigInt        @default(0)   // token balance (tokens = pixels)
+  lockedPixels     BigInt        @default(0)   // sum of all claimed area pixels
+  availableQuota   BigInt        @default(0)   // totalQuota - lockedPixels
+  gracePeriodEnd   DateTime?
+  lastSynced       DateTime      @default(now())
+  createdAt        DateTime      @default(now())
+  manualOverride   Boolean       @default(false)
+  areas            PixelArea[]
+  transactions     TokenEvent[]
+  skipSignature    Boolean       @default(false)
+
+  @@map("wallets")
+}
+
+model PixelArea {
+  id          String      @id @default(cuid())
+  wallet      Wallet      @relation(fields: [walletAddress], references: [address])
+  walletAddress String
+  x           Int
+  y           Int
+  width       Int
+  height      Int
+  pixelCount  BigInt      // width * height
+  imageUrl    String?     // R2 public URL
+  imageKey    String?     // R2 storage key
+  imageType   String?     // jpg | png | gif
+  status      AreaStatus  @default(ACTIVE)
+  claimedAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([walletAddress])
+  @@index([status])
+  @@index([x, y])
+  @@map("pixel_areas")
+}
+
+model CanvasTile {
+  id        String   @id  // "x_y" tile coordinate key
+  tileX     Int
+  tileY     Int
+  imageData String?  // base64 or R2 key for tile composite
+  isDirty   Boolean  @default(false)
+  updatedAt DateTime @updatedAt
+
+  @@index([tileX, tileY])
+  @@map("canvas_tiles")
+}
+
+model TokenEvent {
+  id          String     @id @default(cuid())
+  wallet      Wallet     @relation(fields: [walletAddress], references: [address])
+  walletAddress String
+  eventType   EventType
+  amount      BigInt
+  signature   String     @unique
+  createdAt   DateTime   @default(now())
+
+  @@index([walletAddress])
+  @@map("token_events")
+}
+
+enum AreaStatus {
+  ACTIVE
+  AT_RISK
+  RELEASED
+  FORBIDDEN
+}
+
+enum EventType {
+  BUY
+  SELL
+  TRANSFER_IN
+  TRANSFER_OUT
+}
+
+model AdminUser {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+}
