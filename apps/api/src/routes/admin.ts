@@ -115,15 +115,25 @@ const adminRoutes: FastifyPluginAsync = async (app) => {
   "/test-wallet",
   async (req) => {
     const { address, quota = 10_000_000, skipSignature = false } = req.body;
+    // Létező wallet esetén figyelembe vesszük a már lefoglalt pixeleket
+    const existing = await prisma.wallet.findUnique({
+      where: { address },
+      select: { lockedPixels: true },
+    });
+    const newTotal  = BigInt(quota);
+    const locked    = existing?.lockedPixels ?? 0n;
+    const available = newTotal >= locked ? newTotal - locked : 0n;
+
     const wallet = await prisma.wallet.upsert({
       where: { address },
-      update: { totalQuota: BigInt(quota), manualOverride: true, skipSignature },
-      create: { address, totalQuota: BigInt(quota), manualOverride: true, skipSignature },
+      update: { totalQuota: newTotal, availableQuota: available, manualOverride: true, skipSignature },
+      create: { address, totalQuota: newTotal, availableQuota: newTotal, manualOverride: true, skipSignature },
     });
     return {
       ...wallet,
-      totalQuota: Number(wallet.totalQuota),
-      lockedPixels: Number(wallet.lockedPixels),
+      totalQuota:     Number(wallet.totalQuota),
+      lockedPixels:   Number(wallet.lockedPixels),
+      availableQuota: Number(wallet.availableQuota),
     };
   }
 );

@@ -25,11 +25,17 @@ const walletRoutes: FastifyPluginAsync = async (app) => {
       return reply.send(wallet);
     }
     // Friss adat — közvetlen DB válasz, nincs on-chain hívás
+    // Fontos: BigInt mezőket kötelező string-re konvertálni (JSON.stringify nem kezeli a BigInt-et)
     return reply.send({
-      ...existing,
-      totalQuota:     existing.totalQuota.toString(),
-      lockedPixels:   existing.lockedPixels.toString(),
-      availableQuota: existing.availableQuota.toString(),
+      address:         existing.address,
+      totalQuota:      existing.totalQuota.toString(),
+      lockedPixels:    existing.lockedPixels.toString(),
+      availableQuota:  existing.availableQuota.toString(),
+      gracePeriodEnd:  existing.gracePeriodEnd,
+      lastSynced:      existing.lastSynced,
+      createdAt:       existing.createdAt,
+      manualOverride:  existing.manualOverride,
+      skipSignature:   existing.skipSignature,
     });
   });
 
