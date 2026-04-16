@@ -17,8 +17,10 @@ export async function verifyWalletSignature(
   // ── skipSignature ellenőrzés ──
   const wallet = await prisma.wallet.findUnique({ where: { address: walletAddress } });
   if (wallet?.skipSignature) {
-  // Sign ellenőrzés ki van kapcsolva ennél a walletnél — átmegyünk
-  return;
+    // Sign ellenőrzés ki van kapcsolva ennél a walletnél — átmegyünk
+    // FONTOS: walletAddress-t be kell írni a req-be, különben a canvas route-ban undefined lesz
+    (req as any).walletAddress = walletAddress;
+    return;
   }
   // Normál sign ellenőrzés
   if (!signature || !claimMessage) {

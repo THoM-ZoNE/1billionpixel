@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
+import { useWallet } from "@solana/wallet-adapter-react";
 import { api } from "@/lib/api";
 import { CanvasRegion } from "@1bp/shared";
 import bs58 from "bs58";
@@ -14,6 +15,7 @@ interface ClaimModalProps {
 }
 
 export function ClaimModal({ region, availableQuota, onClose, onImageSelected }: ClaimModalProps) {
+  const wallet = useWallet();
   const [link,         setLink]         = useState("");
   const [imageFile,    setImageFile]    = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -68,49 +70,62 @@ export function ClaimModal({ region, availableQuota, onClose, onImageSelected }:
   };
 
   const handleClaim = async () => {
-  setLoading(true);
-  setError(null);
-  try {
-    // Wallet address kinyerése
-    const address = (window as any).solana?.publicKey?.toBase58() as string | undefined;
-    if (!address) throw new Error("Wallet nincs csatlakoztatva");
+    setLoading(true);
+    setError(null);
+    try {
+      // Wallet address — wallet adapter-ből, nem window.solana-ból
+      const address = wallet.publicKey?.toBase58();
+      if (!address) throw new Error("Wallet nincs csatlakoztatva");
 
-    // Wallet signature
-    const claimMessage = `claim:${address}:${Date.now()}`;
-    const encodedMessage = new TextEncoder().encode(claimMessage);
-    const signedMessage = await (window as any).solana.signMessage(encodedMessage, "utf8");
-    const signature = bs58.encode(signedMessage.signature);
+      const formData = new FormData();
+      formData.append("x",      String(region.x));
+      formData.append("y",      String(region.y));
+      formData.append("width",  String(region.width));
+      formData.append("height", String(region.height));
+      if (link.trim()) formData.append("link", link.trim());
+      if (imageFile)   formData.append("image", imageFile);
 
-    const formData = new FormData();
-    formData.append("x",      String(region.x));
-    formData.append("y",      String(region.y));
-    formData.append("width",  String(region.width));
-    formData.append("height", String(region.height));
-    if (link.trim()) formData.append("link", link.trim());
-    if (imageFile)   formData.append("image", imageFile);
+      // skipSignature — aláírás nélkül próbálunk, backend dönti el
+      // Ha a wallet skipSignature=true, a middleware engedi át signature nélkül
+      let headers: Record<string, string> = {
+        "walletaddress": address,
+      };
 
-    const res = await fetch("/api/canvas/claim", {
-      method: "POST",
-      headers: {
-        "walletaddress":    address,
-        "signature":        signature,
-        "x-claim-message":  claimMessage,
-      },
-      body: formData,
-    });
+      // Ha a wallet adapter tud aláírni, az aláírást is melleküldjük
+      // (ha skipSignature=true, a backend figyelmen kívül hagyja)
+      if (wallet.signMessage) {
+        try {
+          const claimMessage   = `claim:${address}:${Date.now()}`;
+          const encodedMessage = new TextEncoder().encode(claimMessage);
+          const sigBytes       = await wallet.signMessage(encodedMessage);
+          const signature      = bs58.encode(sigBytes);
+          headers["signature"]        = signature;
+          headers["x-claim-message"]  = claimMessage;
+        } catch {
+          // Felhasználó elutasította az aláírást — skipSignature esetén tovább mehet
+        }
+      }
 
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data?.error ?? `HTTP ${res.status}`);
+      // Közvetlen backend hívás (nem Next.js proxyn át)
+      const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
+      const res = await fetch(`${apiBase}/canvas/claim`, {
+        method: "POST",
+        headers,
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error ?? `HTTP ${res.status}`);
+      }
+
+      setStep("done");
+    } catch (err: any) {
+      setError(err?.message ?? "Hiba történt a claim során.");
+    } finally {
+      setLoading(false);
     }
-
-    setStep("done");
-  } catch (err: any) {
-    setError(err?.message ?? "Hiba történt a claim során.");
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
 
   // ── Common styles ───────────────────────────────────────────────────────
