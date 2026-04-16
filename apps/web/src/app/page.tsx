@@ -1,10 +1,13 @@
 "use client";
 
-import { HeroSection }   from "@/components/landing/HeroSection";
-import { StatsBar }      from "@/components/landing/StatsBar";
-import {CanvasPreview} from "@/components/canvas/CanvasPreview";
-import { HowItWorks }    from "@/components/landing/HowItWorks";
-import { ClaimSection }  from "@/components/landing/ClaimSection";
+import dynamic from "next/dynamic";
+import { StatsBar }   from "@/components/landing/StatsBar";
+import { HowItWorks } from "@/components/landing/HowItWorks";
+
+// useWallet()-et használnak — WalletProvider nélkül SSR-ben kivételt dobnának
+const HeroSection   = dynamic(() => import("@/components/landing/HeroSection").then(m => m.HeroSection),     { ssr: false });
+const CanvasPreview = dynamic(() => import("@/components/canvas/CanvasPreview").then(m => m.CanvasPreview),  { ssr: false });
+const ClaimSection  = dynamic(() => import("@/components/landing/ClaimSection").then(m => m.ClaimSection),   { ssr: false });
 
 export default function HomePage() {
   return (

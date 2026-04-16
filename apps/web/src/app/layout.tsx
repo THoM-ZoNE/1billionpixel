@@ -2,9 +2,15 @@
 import "@/app/globals.css";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { Navbar }         from "@/components/layout/Navbar";
+import dynamic from "next/dynamic";
 import { Press_Start_2P, Pixelify_Sans } from "next/font/google";
 import { Providers } from "./providers";
+
+// SSR kikapcsolva — a Navbar useWallet()-et használ, ami WalletProvider nélkül SSR-ben kivételt dob
+const Navbar = dynamic(
+  () => import("@/components/layout/Navbar").then(m => m.Navbar),
+  { ssr: false }
+);
 
 const pressStart = Press_Start_2P({
   weight: "400",
