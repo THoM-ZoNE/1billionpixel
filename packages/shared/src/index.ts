@@ -24,6 +24,8 @@ export interface WalletDTO {
   lockedPixels: number;
   availableQuota: number;
   gracePeriodEnd: string | null;
+  skipSignature: boolean;
+  manualOverride: boolean;
   areas: PixelAreaDTO[];
 }
 

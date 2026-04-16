@@ -53,6 +53,8 @@ export const syncWalletBalance = async (address: string) => {
   const lockedPixels   = existing?.lockedPixels ?? 0n;
   const availableQuota = onChain >= lockedPixels ? onChain - lockedPixels : 0n;
 
+  // Ha manualOverride be van kapcsolva, csak a lastSynced-et frissítjük —
+  // a totalQuota és availableQuota manuálisan lett beállítva, nem írjuk felül.
   const wallet = await prisma.wallet.upsert({
     where:  { address },
     create: {
@@ -61,11 +63,9 @@ export const syncWalletBalance = async (address: string) => {
       lockedPixels:   0n,
       availableQuota: onChain,
     },
-    update: {
-      totalQuota:     onChain,
-      availableQuota: availableQuota,
-      lastSynced:     new Date(),
-    },
+    update: existing?.manualOverride
+      ? { lastSynced: new Date() }
+      : { totalQuota: onChain, availableQuota: availableQuota, lastSynced: new Date() },
   });
 
   return {

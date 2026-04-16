@@ -5,7 +5,7 @@ import { api }        from "@/lib/api";
 interface WalletState {
   walletData:    WalletDTO | null;
   isLoading:     boolean;
-  fetchWallet:   (address: string) => Promise<void>;
+  fetchWallet:   (address: string) => Promise<WalletDTO | null>;
   clearWallet:   () => void;
 }
 
@@ -18,6 +18,9 @@ export const useWalletStore = create<WalletState>((set) => ({
     try {
       const data = await api.get<WalletDTO>(`/wallet/${address}`);
       set({ walletData: data });
+      return data;
+    } catch {
+      return null;
     } finally {
       set({ isLoading: false });
     }

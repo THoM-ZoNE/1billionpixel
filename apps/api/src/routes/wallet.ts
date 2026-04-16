@@ -7,10 +7,30 @@ import { verifySignature }   from "../lib/auth.js";
 const walletRoutes: FastifyPluginAsync = async (app) => {
 
   // GET /api/wallet/:address  — load wallet state
+  // Csak akkor szinkronizál on-chain, ha a wallet még nem létezik, vagy az adat
+  // régebbi 5 percnél. Ez megakadályozza, hogy oldalfrissítésre felulírja a
+  // manuális kvótát (a manualOverride check a syncWalletBalance-ban is benn van).
   app.get<{ Params: { address: string } }>("/:address", async (req, reply) => {
     const { address } = req.params;
-    const wallet = await syncWalletBalance(address);
-    return reply.send(wallet);
+    const existing = await prisma.wallet.findUnique({ where: { address } });
+    if (!existing) {
+      // Új wallet — létrehozzuk on-chain adatokkal
+      const wallet = await syncWalletBalance(address);
+      return reply.send(wallet);
+    }
+    const STALE_MS = 5 * 60 * 1000; // 5 perc
+    const isStale = Date.now() - existing.lastSynced.getTime() > STALE_MS;
+    if (isStale) {
+      const wallet = await syncWalletBalance(address);
+      return reply.send(wallet);
+    }
+    // Friss adat — közvetlen DB válasz, nincs on-chain hívás
+    return reply.send({
+      ...existing,
+      totalQuota:     existing.totalQuota.toString(),
+      lockedPixels:   existing.lockedPixels.toString(),
+      availableQuota: existing.availableQuota.toString(),
+    });
   });
 
   // POST /api/wallet/connect  — wallet connect + sign verification
