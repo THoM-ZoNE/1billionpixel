@@ -68,11 +68,15 @@ export const syncWalletBalance = async (address: string) => {
       : { totalQuota: onChain, availableQuota: availableQuota, lastSynced: new Date() },
   });
 
+  // availableQuota-t mindig on-the-fly számítjuk — a DB-ben tárolt érték elcsúszikásban lehet
+  const effectiveAvailable = wallet.totalQuota >= wallet.lockedPixels
+    ? wallet.totalQuota - wallet.lockedPixels
+    : 0n;
   return {
     ...wallet,
     totalQuota:     wallet.totalQuota.toString(),
     lockedPixels:   wallet.lockedPixels.toString(),
-    availableQuota: wallet.availableQuota.toString(),
+    availableQuota: effectiveAvailable.toString(),
   };
 };
 

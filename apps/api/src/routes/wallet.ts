@@ -26,11 +26,16 @@ const walletRoutes: FastifyPluginAsync = async (app) => {
     }
     // Friss adat — közvetlen DB válasz, nincs on-chain hívás
     // Fontos: BigInt mezőket kötelező string-re konvertálni (JSON.stringify nem kezeli a BigInt-et)
+    // availableQuota-t mindig on-the-fly számítjuk: totalQuota - lockedPixels
+    // Így sosem lesz elcsúszikás a DB-ben tárolt érték és a valóság között
+    const effectiveAvailable = existing.totalQuota >= existing.lockedPixels
+      ? existing.totalQuota - existing.lockedPixels
+      : 0n;
     return reply.send({
       address:         existing.address,
       totalQuota:      existing.totalQuota.toString(),
       lockedPixels:    existing.lockedPixels.toString(),
-      availableQuota:  existing.availableQuota.toString(),
+      availableQuota:  effectiveAvailable.toString(),
       gracePeriodEnd:  existing.gracePeriodEnd,
       lastSynced:      existing.lastSynced,
       createdAt:       existing.createdAt,

@@ -132,9 +132,11 @@ export async function claimArea(input: ClaimAreaInput) {
     throw new Error("WALLET_NOT_FOUND: Wallet not registered");
   }
 
-  if (wallet.availableQuota < pixelCount) {
+  // On-the-fly számítás: totalQuota - lockedPixels — így a manualOverride is működik
+  const effectiveAvailable = wallet.totalQuota - wallet.lockedPixels;
+  if (effectiveAvailable < pixelCount) {
     throw new Error(
-      `INSUFFICIENT_QUOTA: Need ${pixelCount} pixels, have ${wallet.availableQuota}`
+      `INSUFFICIENT_QUOTA: Need ${pixelCount} pixels, have ${effectiveAvailable}`
     );
   }
 

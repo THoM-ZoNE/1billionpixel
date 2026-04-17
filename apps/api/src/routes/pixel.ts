@@ -39,17 +39,19 @@ const pixelRoutes: FastifyPluginAsync = async (app) => {
     if (!valid) return reply.status(401).send({ error: "Invalid signature" });
   }
 
-  // 2. Sync on-chain balance
-  const wallet = await syncWalletBalance(body.walletAddress);
+  // 2. Wallet lekérése DB-ből (syncWalletBalance nem írja felül a manualOverride kvótát)
+  const dbWallet = await prisma.wallet.findUnique({ where: { address: body.walletAddress } });
+  if (!dbWallet) return reply.status(404).send({ error: "Wallet not found" });
 
-  // 3. Check quota
+  // 3. Check quota — mindig on-the-fly számítjuk: totalQuota - lockedPixels
+  // Így a manualOverride és a közvetlen DB kvóta is helyesen működik
   const requestedPixels = BigInt(body.width) * BigInt(body.height);
-  const availableQuota = BigInt(wallet.availableQuota ?? 0);
+  const effectiveAvailable = dbWallet.totalQuota - dbWallet.lockedPixels;
 
-  if (availableQuota < requestedPixels) {
+  if (effectiveAvailable < requestedPixels) {
     return reply.status(400).send({
       error: "Insufficient pixel quota",
-      available: availableQuota.toString(),
+      available: effectiveAvailable.toString(),
       requested: requestedPixels.toString(),
     });
   }
