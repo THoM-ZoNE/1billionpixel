@@ -430,7 +430,7 @@ export default function AdminPage() {
   // ── Admin felület ── (marad az eredeti, csak logout gomb kerül a fejlécbe)
   return (
     <div style={{ minHeight: "100vh", background: "#0a0a0a", color: "#fff", fontFamily: "monospace", padding: "32px 24px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32, paddingTop: 50 }}>
         <h1 style={{ color: "#14f195", margin: 0 }}>1BP ADMIN</h1>
         <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
           <a href="/" style={{ color: "#888", fontSize: 13 }}>← Back to main page</a>
