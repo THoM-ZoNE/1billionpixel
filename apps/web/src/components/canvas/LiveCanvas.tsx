@@ -64,7 +64,7 @@ export function LiveCanvas(){
 
   // ── X skálánál SCALE_X kompenzáció, Y változatlan ──
   const sx2 = (vcW / CANVAS_W) * SCALE_X;
-  const sy2 = vcH / CANVAS_H;
+  const sy2 = vcW / (CANVAS_H * 2.4);
 
   areas.forEach((area) => {
     const sx = area.x * sx2 + ox;
