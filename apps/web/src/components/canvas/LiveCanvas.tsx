@@ -44,86 +44,117 @@ export function LiveCanvas() {
 
   // ─── Draw ────────────────────────────────────────────────────────────────────
   const draw = useCallback(() => {
-    const canvas = canvasRef.current; if (!canvas) return;
-    const ctx    = canvas.getContext("2d"); if (!ctx) return;
-    const W = canvas.width, H = canvas.height;
+  const canvas = canvasRef.current;
+  if (!canvas) return;
 
-    ctx.clearRect(0, 0, W, H);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
 
-    // scaleX/scaleY: world px → canvas px (uniform scales, no distortion)
-    const scaleX = (W / WORLD_W) * zoom;
-    const scaleY = (H / WORLD_H) * zoom;
-    const ox = offset.x, oy = offset.y;
+  const W = canvas.width;
+  const H = canvas.height;
 
-    // ── Clip to capsule shape ─────────────────────────────────────────────────
-    ctx.save();
-    drawCapsulePath(ctx, scaleX, scaleY, ox, oy);
-    ctx.clip();
-    ctx.fillStyle = "#111";
-    ctx.fillRect(0, 0, W, H);
+  ctx.clearRect(0, 0, W, H);
 
-    // ── Grid ──────────────────────────────────────────────────────────────────
-    const gridStep = Math.max(1, Math.round(40 / zoom)) * (WORLD_W / W);
-    const gss = (gridStep / WORLD_W) * W * zoom;
-    ctx.strokeStyle = "rgba(20,241,149,0.055)";
-    ctx.lineWidth = 0.5;
-    const sgx = Math.floor(-ox / gss) * gss + ox;
-    const sgy = Math.floor(-oy / gss) * gss + oy;
-    for (let x = sgx; x < W; x += gss) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
-    for (let y = sgy; y < H; y += gss) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+  // FIX keret skála — a kapszula mindig ugyanott marad
+  const frameScaleX = W / WORLD_W;
+  const frameScaleY = H / WORLD_H;
 
-    // ── Areas ─────────────────────────────────────────────────────────────────
-    areas.forEach((area) => {
-      const sx = area.x * scaleX + ox;
-      const sy = area.y * scaleY + oy;
-      const sw = Math.max(1, area.width  * scaleX);
-      const sh = Math.max(1, area.height * scaleY);
-      if (sx + sw < 0 || sy + sh < 0 || sx > W || sy > H) return;
+  // MOZGÓ tartalom skála — ez zoomol/pannol
+  const contentScaleX = frameScaleX * zoom;
+  const contentScaleY = frameScaleY * zoom;
+  const ox = offset.x;
+  const oy = offset.y;
 
-      if ((area.status as string) === "FORBIDDEN") {
-        ctx.fillStyle = "rgba(255, 30, 30, 0.35)";
-        ctx.fillRect(sx, sy, sw, sh);
-        return;
-      }
-      if (area.imageUrl) {
-        let img = imgCache.current.get(area.imageUrl);
-        if (!img) {
-          img = new Image();
-          img.crossOrigin = "anonymous";
-          img.src = area.imageUrl;
-          img.onload = () => draw();
-          imgCache.current.set(area.imageUrl!, img!);
-        }
-        if (img.complete && img.naturalWidth > 0) {
-          ctx.drawImage(img, sx, sy, sw, sh);
-        } else {
-          ctx.fillStyle = area.status === "AT_RISK" ? "rgba(245,158,11,0.6)" : "#7C3AED";
-          ctx.fillRect(sx, sy, sw, sh);
-        }
-      } else {
-        ctx.fillStyle = area.status === "AT_RISK" ? "rgba(245,158,11,0.6)" : "#7C3AED";
-        ctx.fillRect(sx, sy, sw, sh);
-      }
-    });
+  // 1) Fix kapszula clip
+  ctx.save();
+  drawCapsulePath(ctx, frameScaleX, frameScaleY, 0, 0);
+  ctx.clip();
 
-    ctx.restore();
+  ctx.fillStyle = "#111";
+  ctx.fillRect(0, 0, W, H);
 
-    // ── Capsule stroke (outside clip) ─────────────────────────────────────────
-    drawCapsulePath(ctx, scaleX, scaleY, ox, oy);
-    ctx.strokeStyle = "rgba(20,241,149,0.5)";
-    ctx.lineWidth   = 2;
-    ctx.stroke();
+  // 2) Grid már content-space-ben
+  const gridStepWorld = Math.max(1, Math.round(40 / zoom)) * (WORLD_W / W);
+  const gridStepX = gridStepWorld * contentScaleX;
+  const gridStepY = gridStepWorld * contentScaleY;
 
-    // ── Forbidden corner zones (outside capsule, always visible at any zoom) ──
-    // A teljes canvas területéből kivonjuk a kapszulát → vöröses sarokzónák
-    ctx.save();
-    ctx.fillStyle = "rgba(255,30,30,0.08)";
+  ctx.strokeStyle = "rgba(20,241,149,0.055)";
+  ctx.lineWidth = 0.5;
+
+  const startGridX = Math.floor(-ox / gridStepX) * gridStepX + ox;
+  const startGridY = Math.floor(-oy / gridStepY) * gridStepY + oy;
+
+  for (let x = startGridX; x < W; x += gridStepX) {
     ctx.beginPath();
-    ctx.rect(0, 0, W, H);
-    drawCapsulePath(ctx, scaleX, scaleY, ox, oy);
-    ctx.fill("evenodd");
-    ctx.restore();
-  }, [areas, zoom, offset]);
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, H);
+    ctx.stroke();
+  }
+
+  for (let y = startGridY; y < H; y += gridStepY) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(W, y);
+    ctx.stroke();
+  }
+
+  // 3) Area-k content-space-ben
+  areas.forEach((area) => {
+    const sx = area.x * contentScaleX + ox;
+    const sy = area.y * contentScaleY + oy;
+    const sw = Math.max(1, area.width * contentScaleX);
+    const sh = Math.max(1, area.height * contentScaleY);
+
+    if (sx + sw < 0 || sy + sh < 0 || sx > W || sy > H) return;
+
+    if (area.status === "FORBIDDEN") {
+      ctx.fillStyle = "rgba(255, 30, 30, 0.35)";
+      ctx.fillRect(sx, sy, sw, sh);
+      return;
+    }
+
+    if (area.imageUrl) {
+      let img = imgCache.current.get(area.imageUrl);
+
+      if (!img) {
+        img = new Image();
+        img.crossOrigin = "anonymous";
+        img.src = area.imageUrl;
+        img.onload = () => draw();
+        imgCache.current.set(area.imageUrl, img);
+      }
+
+      if (img.complete && img.naturalWidth > 0) {
+        ctx.drawImage(img, sx, sy, sw, sh);
+      } else {
+        ctx.fillStyle =
+          area.status === "AT_RISK" ? "rgba(245,158,11,0.6)" : "#7C3AED";
+        ctx.fillRect(sx, sy, sw, sh);
+      }
+    } else {
+      ctx.fillStyle =
+        area.status === "AT_RISK" ? "rgba(245,158,11,0.6)" : "#7C3AED";
+      ctx.fillRect(sx, sy, sw, sh);
+    }
+  });
+
+  ctx.restore();
+
+  // 4) Fix kapszula stroke
+  drawCapsulePath(ctx, frameScaleX, frameScaleY, 0, 0);
+  ctx.strokeStyle = "rgba(20,241,149,0.5)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // 5) Kapszulán kívüli sarok-zónák fixen a frame-hez igazítva
+  ctx.save();
+  ctx.fillStyle = "rgba(255,30,30,0.08)";
+  ctx.beginPath();
+  ctx.rect(0, 0, W, H);
+  drawCapsulePath(ctx, frameScaleX, frameScaleY, 0, 0);
+  ctx.fill("evenodd");
+  ctx.restore();
+}, [areas, zoom, offset]);
 
   useEffect(() => { draw(); }, [draw]);
 
