@@ -163,16 +163,24 @@ const pixelRoutes: FastifyPluginAsync = async (app) => {
     }
 
     // 4. Explicit FORBIDDEN overlap guard
-    const forbiddenHit = await overlapsForbiddenZone(
-      body.x,
-      body.y,
-      body.width,
-      body.height
-    );
+    const forbiddenAreas = await prisma.pixelArea.findMany({
+  where: { status: "FORBIDDEN" },
+  select: { id: true, x: true, y: true, width: true, height: true },
+});
 
-    if (forbiddenHit) {
-      return reply.status(409).send({ error: "Forbidden zone" });
-    }
+const forbiddenHit = forbiddenAreas.find((a) => {
+  const noOverlap =
+    a.x + a.width <= body.x ||
+    body.x + body.width <= a.x ||
+    a.y + a.height <= body.y ||
+    body.y + body.height <= a.y;
+
+  return !noOverlap;
+});
+
+if (forbiddenHit) {
+  return reply.status(409).send({ error: "Forbidden zone" });
+}
 
     // 5. Check area availability
     const isAvailable = await checkAreaAvailable(
