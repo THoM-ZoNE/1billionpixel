@@ -121,7 +121,6 @@ export function LiveCanvas() {
     ctx.beginPath();
     ctx.rect(0, 0, W, H);
     drawCapsulePath(ctx, scaleX, scaleY, ox, oy);
-    ctx.evenoddFill = true; // könyvtár-specifikus, alább ld.
     ctx.fill("evenodd");
     ctx.restore();
   }, [areas, zoom, offset]);
