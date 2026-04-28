@@ -1,73 +1,102 @@
-export const CANVAS_W = 42986;
-export const CANVAS_H = 26867;
-export const CAPSULE_R = CANVAS_H / 2;           // 13433.5
+// packages/shared/src/capsule.ts
+// ─── Kapszula geometria — egyetlen igazság forrás (frontend + backend) ───────
 
-// Visszaadja, hogy az (x,y) pont a kapszulán belül van-e
-export function isInsideCapsule(x: number, y: number): boolean {
-  const cy = CANVAS_H / 2;
-  const r  = CANVAS_H / 2;
+export const CAPSULE_W = 51136;
+export const CAPSULE_H = 21494;
+export const CAPSULE_R = 10747; // = CAPSULE_H / 2
 
-  // Bal félkör középpontja: (r, cy), jobb: (WORLD_W - r, cy)
-  if (x < r) {
-    const dx = x - r;
-    const dy = y - cy;
-    return dx * dx + dy * dy <= r * r;
+export const WORLD_W = 61363;   // CAPSULE_W × 1.2
+export const WORLD_H = 25793;   // CAPSULE_H × 1.2
+
+export const CAPSULE_OFFSET_X = 5114;  // (WORLD_W - CAPSULE_W) / 2
+export const CAPSULE_OFFSET_Y = 2150;  // (WORLD_H - CAPSULE_H) / 2
+
+// Legacy alias-ok — ha valahol még CANVAS_W/H van importálva, nem törik el
+export const CANVAS_W = WORLD_W;
+export const CANVAS_H = WORLD_H;
+
+// ─── Pont-szintű ellenőrzés (world koordinátákban) ────────────────────────────
+
+export function isInsideCapsule(wx: number, wy: number): boolean {
+  // World → lokális kapszula koordináta
+  const lx = wx - CAPSULE_OFFSET_X;
+  const ly = wy - CAPSULE_OFFSET_Y;
+
+  // Befoglaló téglalap ellenőrzés
+  if (lx < 0 || ly < 0 || lx > CAPSULE_W || ly > CAPSULE_H) return false;
+
+  const cy = CAPSULE_H / 2;
+
+  // Bal félkör
+  if (lx < CAPSULE_R) {
+    const dx = lx - CAPSULE_R;
+    const dy = ly - cy;
+    return dx * dx + dy * dy <= CAPSULE_R * CAPSULE_R;
   }
-  if (x > CANVAS_W - r) {
-    const dx = x - (CANVAS_W - r);
-    const dy = y - cy;
-    return dx * dx + dy * dy <= r * r;
+
+  // Jobb félkör
+  if (lx > CAPSULE_W - CAPSULE_R) {
+    const dx = lx - (CAPSULE_W - CAPSULE_R);
+    const dy = ly - cy;
+    return dx * dx + dy * dy <= CAPSULE_R * CAPSULE_R;
   }
-  return true; // középső téglalap mindig belül
+
+  // Középső téglalap — mindig belül
+  return true;
 }
 
-// Visszaadja, hogy egy téglalap TELJESEN belül van-e (claim ellenőrzés)
+// ─── Téglalap-szintű ellenőrzések ─────────────────────────────────────────────
+
+/**
+ * Claim validáció: a téglalap ÖSSZES pontja a kapszulán belül kell legyen.
+ * Csak a 4 sarokpontot ellenőrzi — ez elégséges a konvex kapszula formánál.
+ */
 export function isClaimable(
-  ax: number, ay: number, aw: number, ah: number,
-  step = 50
+  ax: number,
+  ay: number,
+  aw: number,
+  ah: number,
 ): boolean {
-  for (let x = ax; x <= ax + aw; x += step) {
-    for (let y = ay; y <= ay + ah; y += step) {
-      if (!isInsideCapsule(x, y)) return false;
-    }
-  }
-  // Sarkok ellenőrzése
-  for (const [px, py] of [
-    [ax, ay], [ax+aw, ay], [ax, ay+ah], [ax+aw, ay+ah]
-  ]) {
-    if (!isInsideCapsule(px, py)) return false;
-  }
-  return true;
+  return (
+    isInsideCapsule(ax,      ay) &&
+    isInsideCapsule(ax + aw, ay) &&
+    isInsideCapsule(ax,      ay + ah) &&
+    isInsideCapsule(ax + aw, ay + ah)
+  );
 }
 
+/**
+ * Tile teljesen kívül van-e? (renderer optimalizáláshoz)
+ */
 export function isTileFullyOutside(
-  tx: number, ty: number,
-  tw: number, th: number,
-  step = 50 // 50px-enként mintavételez
+  tx: number,
+  ty: number,
+  tw: number,
+  th: number,
 ): boolean {
-  for (let x = tx; x <= tx + tw; x += step) {
-    for (let y = ty; y <= ty + th; y += step) {
-      if (isInsideCapsule(x, y)) return false;
-    }
-  }
-  // Sarkok explicit ellenőrzése
-  for (const [px, py] of [
-    [tx, ty], [tx + tw, ty], [tx, ty + th], [tx + tw, ty + th],
-  ]) {
-    if (isInsideCapsule(px, py)) return false;
-  }
+  // Ha bármely sarok belül van, nem teljesen kívül
+  if (isInsideCapsule(tx,      ty))      return false;
+  if (isInsideCapsule(tx + tw, ty))      return false;
+  if (isInsideCapsule(tx,      ty + th)) return false;
+  if (isInsideCapsule(tx + tw, ty + th)) return false;
+
+  // Élközéppontok is — hogy a félkörök ne csússzanak át
+  if (isInsideCapsule(tx + tw / 2, ty))       return false;
+  if (isInsideCapsule(tx + tw / 2, ty + th))  return false;
+  if (isInsideCapsule(tx,      ty + th / 2))  return false;
+  if (isInsideCapsule(tx + tw, ty + th / 2))  return false;
+
   return true;
 }
 
+/**
+ * Tile részben kívül van-e? (partial overlap detekció)
+ */
 export function isTilePartiallyOutside(
-  tx: number, ty: number,
-  tw: number, th: number,
-  step = 50
+  tx: number,
+  ty: number,
+  tw: number,
+  th: number,
 ): boolean {
-  for (let x = tx; x <= tx + tw; x += step) {
-    for (let y = ty; y <= ty + th; y += step) {
-      if (!isInsideCapsule(x, y)) return true;
-    }
-  }
-  return false;
+  return !isClaimable(tx, ty, tw, th);
 }

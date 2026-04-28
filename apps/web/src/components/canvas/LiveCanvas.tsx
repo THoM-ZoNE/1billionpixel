@@ -258,7 +258,8 @@ export function LiveCanvas() {
       });
       setTooltip(null);
     } else {
-      const { x: wx, y: wy } = canvasToWorld(cx, cy, canvas.width, canvas.height, zoom, offset.x, offset.y);
+      const wx = (cx - offset.x) / ((canvas.width / WORLD_W) * zoom);
+      const wy = (cy - offset.y) / ((canvas.height / WORLD_H) * zoom);
       const hit = areas.find(a => wx >= a.x && wx <= a.x + a.width && wy >= a.y && wy <= a.y + a.height);
       if (hit) setTooltip({ area: hit, x: e.clientX, y: e.clientY });
       else setTooltip(null);
@@ -273,7 +274,8 @@ export function LiveCanvas() {
     const rect = canvas.getBoundingClientRect();
     const cx = (e.clientX - rect.left) * (canvas.width  / rect.width);
     const cy = (e.clientY - rect.top)  * (canvas.height / rect.height);
-    const { x: wx, y: wy } = canvasToWorld(cx, cy, canvas.width, canvas.height, zoom, offset.x, offset.y);
+    const wx = (cx - offset.x) / ((canvas.width / WORLD_W) * zoom);
+    const wy = (cy - offset.y) / ((canvas.height / WORLD_H) * zoom);
     const hit = areas.find(a => wx >= a.x && wx <= a.x + a.width && wy >= a.y && wy <= a.y + a.height);
     if (hit?.link) window.open(hit.link, "_blank", "noopener,noreferrer");
   };

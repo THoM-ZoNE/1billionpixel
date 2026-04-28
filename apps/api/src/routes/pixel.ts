@@ -7,59 +7,7 @@ import { getAdjacentFreeSpaces } from "../services/adjacency.js";
 import { verifySignature } from "../lib/auth.js";
 import { broadcastCanvasUpdate } from "../lib/websocket.js";
 import { CANVAS_W, CANVAS_H, MIN_AREA_SIZE } from "@1bp/shared";
-
-// ───────────────────────────────────────────────────────────────────────────────
-// Capsule geometry — backend single source of truth for claim validation
-// Ha később lehet, ezt érdemes @1bp/shared-be áttenni, hogy frontend/backend ugyanazt használja
-// ───────────────────────────────────────────────────────────────────────────────
-const CAPSULE_W = 51136;
-const CAPSULE_H = 21494;
-const CAPSULE_R = 10747;
-
-const WORLD_W = 61363;
-const WORLD_H = 25793;
-
-const CAPSULE_OFFSET_X = 5114;
-const CAPSULE_OFFSET_Y = 2150;
-
-function isInsideCapsule(wx: number, wy: number): boolean {
-  const lx = wx - CAPSULE_OFFSET_X;
-  const ly = wy - CAPSULE_OFFSET_Y;
-
-  if (lx < 0 || ly < 0 || lx > CAPSULE_W || ly > CAPSULE_H) return false;
-
-  const midY = CAPSULE_H / 2;
-
-  if (lx < CAPSULE_R) {
-    const dx = lx - CAPSULE_R;
-    const dy = ly - midY;
-    return dx * dx + dy * dy <= CAPSULE_R * CAPSULE_R;
-  }
-
-  if (lx > CAPSULE_W - CAPSULE_R) {
-    const dx = lx - (CAPSULE_W - CAPSULE_R);
-    const dy = ly - midY;
-    return dx * dx + dy * dy <= CAPSULE_R * CAPSULE_R;
-  }
-
-  return true;
-}
-
-function isRectInsideCapsule(
-  wx: number,
-  wy: number,
-  ww: number,
-  wh: number
-): boolean {
-  if (ww <= 0 || wh <= 0) return false;
-
-  return (
-    isInsideCapsule(wx, wy) &&
-    isInsideCapsule(wx + ww, wy) &&
-    isInsideCapsule(wx, wy + wh) &&
-    isInsideCapsule(wx + ww, wy + wh)
-  );
-}
+import { isClaimable, WORLD_W, WORLD_H } from "@1bp/shared";
 
 async function overlapsForbiddenZone(
   x: number,
@@ -120,7 +68,7 @@ const pixelRoutes: FastifyPluginAsync = async (app) => {
     const body = ClaimSchema.parse(req.body);
 
     // 0. Hard backend geometry validation
-    if (!isRectInsideCapsule(body.x, body.y, body.width, body.height)) {
+    if (!isClaimable(body.x, body.y, body.width, body.height)) {
       return reply.status(400).send({ error: "Outside capsule bounds" });
     }
 

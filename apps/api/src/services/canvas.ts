@@ -7,15 +7,18 @@ export async function checkAreaAvailable(
   width: number,
   height: number
 ): Promise<boolean> {
-  const result = await prisma.$queryRaw<{ count: bigint }[]>`
-    SELECT COUNT(*) as count FROM pixel_areas
-    WHERE status = 'ACTIVE'
-      AND x < ${x + width}
-      AND x + width > ${x}
-      AND y < ${y + height}
-      AND y + height > ${y}
-  `;
-  return result[0].count === 0n;
+  const overlap = await prisma.pixelArea.findFirst({
+    where: {
+      status: { in: ["ACTIVE", "AT_RISK", "FORBIDDEN"] }, // ← FORBIDDEN hozzáadva
+      x: { lt: x + width },
+      y: { lt: y + height },
+      AND: [
+        { x: { gte: x } },  
+        { y: { gte: y } },
+      ]
+    }
+  });
+  return !overlap;
 }
 export type PixelArea = {
   id: string;
