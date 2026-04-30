@@ -6,28 +6,8 @@ import { checkAreaAvailable } from "../services/canvas.js";
 import { getAdjacentFreeSpaces } from "../services/adjacency.js";
 import { verifySignature } from "../lib/auth.js";
 import { broadcastCanvasUpdate } from "../lib/websocket.js";
-import { CANVAS_W, CANVAS_H, MIN_AREA_SIZE } from "@1bp/shared";
-import { isClaimable, WORLD_W, WORLD_H } from "@1bp/shared";
+import { isClaimable, WORLD_W, WORLD_H, MIN_AREA_SIZE } from "@1bp/shared";
 
-async function overlapsForbiddenZone(
-  x: number,
-  y: number,
-  width: number,
-  height: number
-) {
-  return prisma.pixelArea.findFirst({
-    where: {
-      status: "FORBIDDEN",
-      x: { lt: x + width },
-      y: { lt: y + height },
-      AND: [
-        { x: { gte: x - width + 1 } },
-        { y: { gte: y - height + 1 } },
-      ],
-    },
-    select: { id: true },
-  });
-}
 
 const ClaimSchema = z.object({
   walletAddress: z.string().length(44),
@@ -110,25 +90,7 @@ const pixelRoutes: FastifyPluginAsync = async (app) => {
       });
     }
 
-    // 4. Explicit FORBIDDEN overlap guard
-    const forbiddenAreas = await prisma.pixelArea.findMany({
-  where: { status: "FORBIDDEN" },
-  select: { id: true, x: true, y: true, width: true, height: true },
-});
-
-const forbiddenHit = forbiddenAreas.find((a) => {
-  const noOverlap =
-    a.x + a.width <= body.x ||
-    body.x + body.width <= a.x ||
-    a.y + a.height <= body.y ||
-    body.y + body.height <= a.y;
-
-  return !noOverlap;
-});
-
-if (forbiddenHit) {
-  return reply.status(409).send({ error: "Forbidden zone" });
-}
+    
 
     // 5. Check area availability
     const isAvailable = await checkAreaAvailable(
