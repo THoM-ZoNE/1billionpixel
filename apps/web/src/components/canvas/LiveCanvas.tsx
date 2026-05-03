@@ -26,7 +26,22 @@ interface Stats {
   percentFilled: number;
   owners: number;
 }
+function clampOffset(
+  ox: number, oy: number,
+  zoom: number,
+  W: number, H: number
+): { x: number; y: number } {
+  const scaledW = WORLD_W * (W / WORLD_W) * zoom; // = W * zoom
+  const scaledH = WORLD_H * (H / WORLD_H) * zoom; // = H * zoom
 
+  const minX = Math.min(0, W - scaledW);
+  const minY = Math.min(0, H - scaledH);
+
+  return {
+    x: Math.max(minX, Math.min(0, ox)),
+    y: Math.max(minY, Math.min(0, oy)),
+  };
+}
 export function LiveCanvas() {
   const canvasRef   = useRef<HTMLCanvasElement>(null);
   const loupeRef    = useRef<HTMLCanvasElement>(null);
@@ -43,10 +58,9 @@ export function LiveCanvas() {
   const [lastUpdate, setLastUpdate] = useState("");
 
   // ─── Draw ────────────────────────────────────────────────────────────────────
-  const draw = useCallback(() => {
+ const draw = useCallback(() => {
   const canvas = canvasRef.current;
   if (!canvas) return;
-
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
 
@@ -55,29 +69,32 @@ export function LiveCanvas() {
 
   ctx.clearRect(0, 0, W, H);
 
-  // FIX keret skála — a kapszula mindig ugyanott marad
   const frameScaleX = W / WORLD_W;
   const frameScaleY = H / WORLD_H;
-
-  // MOZGÓ tartalom skála — ez zoomol/pannol
   const contentScaleX = frameScaleX * zoom;
   const contentScaleY = frameScaleY * zoom;
   const ox = offset.x;
   const oy = offset.y;
 
-  // 1) Piros háttér az egész canvasra — forbidden zóna vizuálisan, 0 DB rekord
-ctx.fillStyle = "rgba(160, 20, 20, 0.55)";
-ctx.fillRect(0, 0, W, H);
+  // 1) Kapszula clip megnyitása
+  ctx.save();
+  drawCapsulePath(ctx, frameScaleX, frameScaleY, 0, 0);
+  ctx.clip();
 
-// 2) Fix kapszula clip — csak a kapszula belseje kapja a fekete hátteret
-ctx.save();
-drawCapsulePath(ctx, frameScaleX, frameScaleY, 0, 0);
-ctx.clip();
+  // 2) Fekete belső háttér
+  ctx.fillStyle = "#0d0d0d";
+  ctx.fillRect(0, 0, W, H);
 
-ctx.fillStyle = "#0d0d0d";
-ctx.fillRect(0, 0, W, H);
+  // 3) Belső forbidden zóna (zoom-követő kapszula sarkok)
+  ctx.save();
+  ctx.fillStyle = "rgba(160, 20, 20, 0.55)";
+  ctx.beginPath();
+  drawCapsulePath(ctx, contentScaleX, contentScaleY, ox, oy);
+  ctx.rect(ox, oy, WORLD_W * contentScaleX, WORLD_H * contentScaleY);
+  ctx.fill("evenodd");
+  ctx.restore();
 
-  // 2) Grid már content-space-ben
+  // 4) Grid
   const gridStepWorld = Math.max(1, Math.round(40 / zoom)) * (WORLD_W / W);
   const gridStepX = gridStepWorld * contentScaleX;
   const gridStepY = gridStepWorld * contentScaleY;
@@ -89,20 +106,13 @@ ctx.fillRect(0, 0, W, H);
   const startGridY = Math.floor(-oy / gridStepY) * gridStepY + oy;
 
   for (let x = startGridX; x < W; x += gridStepX) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, H);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
   }
-
   for (let y = startGridY; y < H; y += gridStepY) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(W, y);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
   }
 
-  // 3) Area-k content-space-ben
+  // 5) Area-k
   areas.forEach((area) => {
     const sx = area.x * contentScaleX + ox;
     const sy = area.y * contentScaleY + oy;
@@ -111,15 +121,8 @@ ctx.fillRect(0, 0, W, H);
 
     if (sx + sw < 0 || sy + sh < 0 || sx > W || sy > H) return;
 
-    if (area.status === "FORBIDDEN") {
-      ctx.fillStyle = "rgba(255, 30, 30, 0.35)";
-      ctx.fillRect(sx, sy, sw, sh);
-      return;
-    }
-
     if (area.imageUrl) {
       let img = imgCache.current.get(area.imageUrl);
-
       if (!img) {
         img = new Image();
         img.crossOrigin = "anonymous";
@@ -127,31 +130,40 @@ ctx.fillRect(0, 0, W, H);
         img.onload = () => draw();
         imgCache.current.set(area.imageUrl, img);
       }
-
       if (img.complete && img.naturalWidth > 0) {
         ctx.drawImage(img, sx, sy, sw, sh);
       } else {
-        ctx.fillStyle =
-          area.status === "AT_RISK" ? "rgba(245,158,11,0.6)" : "#7C3AED";
+        ctx.fillStyle = area.status === "AT_RISK" ? "rgba(245,158,11,0.6)" : "#7C3AED";
         ctx.fillRect(sx, sy, sw, sh);
       }
     } else {
-      ctx.fillStyle =
-        area.status === "AT_RISK" ? "rgba(245,158,11,0.6)" : "#7C3AED";
+      ctx.fillStyle = area.status === "AT_RISK" ? "rgba(245,158,11,0.6)" : "#7C3AED";
       ctx.fillRect(sx, sy, sw, sh);
     }
   });
 
+  ctx.restore(); // ← clip lezárása
+
+  // 6) Piros sarokzóna — clip-en KÍVÜL
+  ctx.save();
+  ctx.fillStyle = "rgba(0, 0, 0, 0.47)";
+  ctx.beginPath();
+  ctx.rect(0, 0, W, H);
+  drawCapsulePath(ctx, frameScaleX, frameScaleY, 0, 0);
+  ctx.fill("evenodd");
   ctx.restore();
 
-  // 4) Fix kapszula stroke
+  // 7) Kapszula stroke
   drawCapsulePath(ctx, frameScaleX, frameScaleY, 0, 0);
   ctx.strokeStyle = "rgba(20,241,149,0.5)";
   ctx.lineWidth = 2;
   ctx.stroke();
+
 }, [areas, zoom, offset]);
 
   useEffect(() => { draw(); }, [draw]);
+
+  
 
   // ─── Loupe ───────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -222,11 +234,14 @@ ctx.fillRect(0, 0, W, H);
       const mouseY = (e.clientY - rect.top)  * (canvas.height / rect.height);
       const delta  = e.deltaY > 0 ? 0.9 : 1.1;
       setZoom(z => {
-        const nz = Math.min(10, Math.max(0.99, z * delta));
-        setOffset(o => ({
-          x: mouseX - (mouseX - o.x) * (nz / z),
-          y: mouseY - (mouseY - o.y) * (nz / z),
-        }));
+        const nz = Math.min(10, Math.max(0.80, z * delta));
+        setOffset(o => {
+  const raw = {
+    x: mouseX - (mouseX - o.x) * (nz / z),
+    y: mouseY - (mouseY - o.y) * (nz / z),
+  };
+  return clampOffset(raw.x, raw.y, nz, canvas.width, canvas.height);
+});
         return nz;
       });
     };
@@ -241,25 +256,27 @@ ctx.fillRect(0, 0, W, H);
   };
 
   const onMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current; if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const cx = (e.clientX - rect.left) * (canvas.width  / rect.width);
-    const cy = (e.clientY - rect.top)  * (canvas.height / rect.height);
-    setMouse({ cx, cy, sx: e.clientX, sy: e.clientY });
-    if (isDragging.current) {
-      setOffset({
-        x: dragStart.current.ox + (e.clientX - dragStart.current.mx) * (canvas.width  / rect.width),
-        y: dragStart.current.oy + (e.clientY - dragStart.current.my) * (canvas.height / rect.height),
-      });
-      setTooltip(null);
-    } else {
-      const wx = (cx - offset.x) / ((canvas.width / WORLD_W) * zoom);
-      const wy = (cy - offset.y) / ((canvas.height / WORLD_H) * zoom);
-      const hit = areas.find(a => wx >= a.x && wx <= a.x + a.width && wy >= a.y && wy <= a.y + a.height);
-      if (hit) setTooltip({ area: hit, x: e.clientX, y: e.clientY });
-      else setTooltip(null);
-    }
-  };
+  const canvas = canvasRef.current; if (!canvas) return;
+  const rect = canvas.getBoundingClientRect();
+  const cx = (e.clientX - rect.left) * (canvas.width / rect.width);
+  const cy = (e.clientY - rect.top) * (canvas.height / rect.height);
+  setMouse({ cx, cy, sx: e.clientX, sy: e.clientY });
+
+  if (isDragging.current) {
+    const raw = {
+      x: dragStart.current.ox + (e.clientX - dragStart.current.mx) * (canvas.width / rect.width),
+      y: dragStart.current.oy + (e.clientY - dragStart.current.my) * (canvas.height / rect.height),
+    };
+    setOffset(clampOffset(raw.x, raw.y, zoom, canvas.width, canvas.height));
+    setTooltip(null);
+  } else {
+    const wx = (cx - offset.x) / ((canvas.width / WORLD_W) * zoom);
+    const wy = (cy - offset.y) / ((canvas.height / WORLD_H) * zoom);
+    const hit = areas.find(a => wx >= a.x && wx <= a.x + a.width && wy >= a.y && wy <= a.y + a.height);
+    if (hit) setTooltip({ area: hit, x: e.clientX, y: e.clientY });
+    else setTooltip(null);
+  }
+};
 
   const onMouseUp    = () => { isDragging.current = false; };
   const onMouseLeave = () => { isDragging.current = false; setMouse(null); setTooltip(null); };
@@ -324,7 +341,7 @@ ctx.fillRect(0, 0, W, H);
 
         {/* Zoom controls */}
         <div style={{ position: "absolute", bottom: 16, left: "50%", transform: "translateX(-50%)", display: "flex", gap: "0.5rem", alignItems: "center", background: "rgba(6,10,6,0.85)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 8, padding: "0.4rem 0.9rem" }}>
-          <button onClick={() => setZoom(z => Math.max(0.99, z - 0.1))} style={{ background: "none", border: "none", color: "#14f195", fontSize: "1.1rem", cursor: "pointer", padding: "0 4px" }}>{"−"}</button>
+          <button onClick={() => setZoom(z => Math.max(0.80, z - 0.1))} style={{ background: "none", border: "none", color: "#14f195", fontSize: "1.1rem", cursor: "pointer", padding: "0 4px" }}>{"−"}</button>
           <span style={{ fontFamily: "monospace", fontSize: "0.7rem", color: "rgba(255,255,255,0.5)", minWidth: 36, textAlign: "center" }}>{zp}%</span>
           <button onClick={() => setZoom(z => Math.min(10, z + 0.1))} style={{ background: "none", border: "none", color: "#14f195", fontSize: "1.1rem", cursor: "pointer", padding: "0 4px" }}>{"+"}</button>
           <span style={{ width: 1, height: 16, background: "rgba(255,255,255,0.1)", margin: "0 4px" }}></span>

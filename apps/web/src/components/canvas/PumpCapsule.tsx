@@ -103,17 +103,21 @@ export function PumpCapsule() {
 
   // ─── Resize ──────────────────────────────────────────────────────────────────
   useEffect(() => {
-    const canvas = canvasRef.current; if (!canvas) return;
-    const resizeAndDraw = () => {
+  const canvas = canvasRef.current; if (!canvas) return;
+  const resizeAndDraw = () => {
+    // Egy frame-et várunk, hogy a CSS aspect-ratio kiszámolódjon
+    requestAnimationFrame(() => {
       const parentWidth = canvas.parentElement?.clientWidth ?? 800;
+      if (parentWidth === 0) return; // még nem renderelt
       canvas.width  = parentWidth;
       canvas.height = Math.round(parentWidth / WORLD_RATIO);
       drawMain(canvas);
-    };
-    resizeAndDraw();
-    window.addEventListener("resize", resizeAndDraw);
-    return () => window.removeEventListener("resize", resizeAndDraw);
-  }, [drawMain]);
+    });
+  };
+  resizeAndDraw();
+  window.addEventListener("resize", resizeAndDraw);
+  return () => window.removeEventListener("resize", resizeAndDraw);
+}, [drawMain]);
 
   // ─── Loupe ───────────────────────────────────────────────────────────────────
   useEffect(() => {

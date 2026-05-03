@@ -4,9 +4,7 @@ const nextConfig = {
    // remotePatterns: [{ protocol: "https", hostname: "assets.1billionpixel.fun" }],
   remotePatterns: [{ protocol: "http", hostname: "localhost", port: "4000" }],  
   },
-  experimental: {
-    serverComponentsExternalPackages: ["sharp"],
-  },
+  serverExternalPackages: ['sharp'],
   async rewrites() {
     return [
       {
