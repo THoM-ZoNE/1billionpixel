@@ -9,6 +9,11 @@ interface WalletState {
   clearWallet:   () => void;
 }
 
+refreshWalletData: async (publicKey: string) => {
+  const data = await api.get(`/wallet/${publicKey}`);
+  set({ walletData: data });
+}
+
 export const useWalletStore = create<WalletState>((set) => ({
   walletData:  null,
   isLoading:   false,

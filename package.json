@@ -25,6 +25,7 @@
     "bcrypt": "^6.0.0",
     "canvas": "^3.2.1",
     "isql": "^3.0.0",
-    "jsonwebtoken": "^9.0.3"
+    "jsonwebtoken": "^9.0.3",
+    "react-konva": "^19.2.3"
   }
 }

@@ -14,7 +14,7 @@ import { CanvasRegion, CANVAS_W, CANVAS_H } from "@1bp/shared";
 
 // ─── Képarány opciók ──────────────────────────────────────────────────────────
 const RATIOS: Record<string, [number, number]> = {
-  "Szabad":  [0, 0],
+  "Free":  [0, 0],
   "1:1":     [1, 1],
   "4:3":     [4, 3],
   "16:9":    [16, 9],
@@ -267,6 +267,15 @@ export function ClaimSection() {
   const available  = Number(walletData?.availableQuota ?? 0);
   const canClaim   = pixelCount > 0 && pixelCount <= available;
 
+const previewImgRef = useRef<HTMLImageElement | null>(null);
+
+useEffect(() => {
+  if (!previewImage) { previewImgRef.current = null; return; }
+  const img = new window.Image();
+  img.src = previewImage;
+  img.onload = () => { previewImgRef.current = img; };
+}, [previewImage]);
+
   if (!connected) return null;
 
   return (
@@ -279,7 +288,7 @@ export function ClaimSection() {
           </h2>
           {walletData && (
             <p style={{ fontSize: "0.8rem", color: "rgba(20,241,149,0.8)", margin: "0.2rem 0 0" }}>
-              {Number(walletData.availableQuota).toLocaleString()} pixel elérhető
+              {Number(walletData.availableQuota).toLocaleString()} pixel avaiable for claiming
             </p>
           )}
         </div>
@@ -342,7 +351,7 @@ export function ClaimSection() {
   style={{
   width: "100%",
   position: "relative",
-  borderRadius: `${Math.round(stageSize.h / 2)}px`,
+  borderRadius: "0.75rem",
   overflow: "hidden",
   border: "2px solid rgba(20,241,149,0.45)",
   boxShadow: "0 0 48px rgba(20,241,149,0.06), inset 0 0 0 1px rgba(20,241,149,0.1)",
@@ -358,12 +367,12 @@ export function ClaimSection() {
             onMouseDown={onMouseDown}
             onMouseMove={onMouseMove}
             onMouseUp={onMouseUp}
-            style={{ display: "block" }}
+            style={{ display: "block", background: "#060a06" }}
         >
-          {/* Default Background */}
-          <Layer listening={false}>
+          {/* Default Background --- FIX?*/}
+          {/*<Layer listening={false}>
             <Rect x={0} y={0} width={CANVAS_W} height={CANVAS_H} fill="#060a06" />
-          </Layer>
+          </Layer>*/}
 
           {/* Grid */}
           <GridLayer scale={scale} stagePos={stagePos} stageSize={stageSize} />
@@ -375,21 +384,15 @@ export function ClaimSection() {
             ))}
           </Layer>
             <Layer listening={false}>
-            {selection && previewImage && (() => {
-                const img = new window.Image();
-                img.src = previewImage;
-                return (
-                <KImage
-                    image={img}
-                    x={selection.x}
-                    y={selection.y}
-                    width={selection.width}
-                    height={selection.height}
-                    opacity={0.75}
-                />
-                );
-            })()}
-            </Layer>
+  {selection && previewImgRef.current && (
+    <KImage
+      image={previewImgRef.current}
+      x={selection.x} y={selection.y}
+      width={selection.width} height={selection.height}
+      opacity={0.75}
+    />
+  )}
+</Layer>
           {/* Active Selection */}
           <Layer>
             {selection && (
