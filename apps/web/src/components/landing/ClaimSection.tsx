@@ -5,210 +5,69 @@ import { useWalletStore } from "@/store/walletStore";
 import { ClaimModal } from "@/components/pixel/ClaimModal";
 import { useCanvasStore } from "@/store/canvasStore";
 import { useEffect, useRef, useCallback, useState } from "react";
-import Konva from "konva";
-import { Stage, Layer, Rect, Image as KImage, Line, Transformer } from "react-konva";
-import useImage from "use-image";
 import { onCanvasEvent, connectWebSocket } from "@/lib/websocket";
 import { api } from "@/lib/api";
-import { CanvasRegion, CANVAS_W, CANVAS_H } from "@1bp/shared";
+import {
+  WORLD_W, WORLD_H, WORLD_RATIO,
+  drawCapsulePath, isRectInsideCapsule,
+} from "@/lib/capsuleConfig";
 
 // ─── Képarány opciók ──────────────────────────────────────────────────────────
 const RATIOS: Record<string, [number, number]> = {
-  "Free":  [0, 0],
-  "1:1":     [1, 1],
-  "4:3":     [4, 3],
-  "16:9":    [16, 9],
-  "21:9":    [21, 9],
-  "9:16":    [9, 16],
+  "Free": [0, 0],
+  "1:1":  [1, 1],
+  "4:3":  [4, 3],
+  "16:9": [16, 9],
+  "21:9": [21, 9],
+  "9:16": [9, 16],
 };
 
-function snapToRatio(
-  x: number, y: number,
-  w: number, h: number,
-  ratio: [number, number]
-): [number, number, number, number] {
-  if (!ratio[0]) return [x, y, w, h];
-  const [rw, rh] = ratio;
-  const newH = Math.round(w * rh / rw);
-  return [
-    Math.max(0, Math.min(x, CANVAS_W - w)),
-    Math.max(0, Math.min(y, CANVAS_H - newH)),
-    w,
-    newH,
-  ];
+const MIN_PX = 10;
+
+interface Area {
+  id?: string;
+  x: number; y: number; width: number; height: number;
+  status: "ACTIVE" | "AT_RISK" | "FORBIDDEN" | "RELEASED";
+  imageUrl?: string;
 }
 
-// ─── Rács layer ───────────────────────────────────────────────────────────────
-function GridLayer({ scale, stagePos, stageSize }: {
-  scale: number;
-  stagePos: { x: number; y: number };
-  stageSize: { w: number; h: number };
-}) {
-  const vx = Math.max(0, -stagePos.x / scale);
-  const vy = Math.max(0, -stagePos.y / scale);
-  const vw = stageSize.w / scale;
-  const vh = stageSize.h / scale;
-  const rawCell = vw / 20;
-  const mag = Math.pow(10, Math.floor(Math.log10(rawCell)));
-  const cellSize = rawCell / mag < 2 ? mag : rawCell / mag < 5 ? mag * 2 : mag * 5;
-  const lines: React.ReactElement[] = [];
-  const sw = 1 / scale;
-  const startX = Math.floor(vx / cellSize) * cellSize;
-  const startY = Math.floor(vy / cellSize) * cellSize;
-  for (let x = startX; x <= vx + vw && x <= CANVAS_W; x += cellSize)
-    lines.push(<Line key={`v${x}`} points={[x, vy, x, vy + vh]} stroke="rgba(20,241,149,0.06)" strokeWidth={sw} listening={false} />);
-  for (let y = startY; y <= vy + vh && y <= CANVAS_H; y += cellSize)
-    lines.push(<Line key={`h${y}`} points={[vx, y, vx + vw, y]} stroke="rgba(20,241,149,0.06)" strokeWidth={sw} listening={false} />);
-  return <Layer listening={false}>{lines}</Layer>;
-}
-
-// ─── Meglévő területek ────────────────────────────────────────────────────────
-function AreaRect({ area }: { area: any }) {
-  const [img] = useImage(area.imageUrl ?? "");
-  const fill   = area.status === "AT_RISK" ? "rgba(245,158,11,0.35)" : "rgba(220,38,38,0.45)";
-  const stroke = area.status === "AT_RISK" ? "#f59e0b" : "#ef4444";
-  return img
-    ? <KImage image={img} x={area.x} y={area.y} width={area.width} height={area.height} />
-    : <Rect x={area.x} y={area.y} width={area.width} height={area.height}
-            fill={fill} stroke={stroke} strokeWidth={1} listening={false} />;
-}
-
-// ─── Fő ClaimSection ─────────────────────────────────────────────────────────
 export function ClaimSection() {
   const { connected } = useWallet();
   const { walletData } = useWalletStore();
   const { areas, setAreas, addArea, removeArea } = useCanvasStore();
 
-  // ── 1. Először MINDEN ref ──────────────────────────────────────────────────
-  const containerRef     = useRef<HTMLDivElement>(null);
-  const stageRef         = useRef<Konva.Stage>(null);
-  const selRectRef       = useRef<Konva.Rect>(null);
-  const trRef            = useRef<Konva.Transformer>(null);
+  // ── Refs ──────────────────────────────────────────────────────────────────
+  const canvasRef     = useRef<HTMLCanvasElement>(null);
+  const dragStart     = useRef<{ wx: number; wy: number } | null>(null);
+  const previewImgRef = useRef<HTMLImageElement | null>(null);
+  const panStart      = useRef<{ cx: number; cy: number; tx: number; ty: number } | null>(null);
+  const hideTimer     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const spacePressedRef = useRef(false);
+  const vtRef         = useRef({ x: 0, y: 0, scale: 1 });
 
-  // ── 2. Azután MINDEN state ─────────────────────────────────────────────────
-  const [stageSize,  setStageSize]  = useState({ w: 800, h: 450 });
-  const [scale,      setScale]      = useState(1);
-  const [stagePos,   setStagePos]   = useState({ x: 0, y: 0 });
-  const [ratioKey,   setRatioKey]   = useState("16:9");
-  const [selection,  setSelection]  = useState<CanvasRegion | null>(null);
-  const [isDrawing,  setIsDrawing]  = useState(false);
-  const [drawStart,  setDrawStart]  = useState({ x: 0, y: 0 });
-  const [showModal,  setShowModal]  = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  // ── State ─────────────────────────────────────────────────────────────────
+  const [ratioKey,        setRatioKey]        = useState("16:9");
+  const [selection,       setSelection]       = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const [dragging,        setDragging]        = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [modalRegion,     setModalRegion]     = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const [previewImage,    setPreviewImage]    = useState<string | null>(null);
+  const [viewTransform,   setViewTransform]   = useState({ x: 0, y: 0, scale: 1 });
+  const [showForbidden,   setShowForbidden]   = useState(false);
+  const [isPanning,       setIsPanning]       = useState(false);
 
-  // ── 3. loadAreas ELŐBB mint attachListeners ────────────────────────────────
+  const availableQuota = Number(walletData?.availableQuota ?? 0);
+
+  // vtRef szinkronban tartása
+  useEffect(() => { vtRef.current = viewTransform; }, [viewTransform]);
+
+  // ── Területek betöltése ───────────────────────────────────────────────────
   const loadAreas = useCallback(async () => {
-    const s = stageRef.current;
-    if (!s) return;
-    const sc = s.scaleX(), pos = s.position();
-    const vx = Math.max(0, -pos.x / sc);
-    const vy = Math.max(0, -pos.y / sc);
-    const vw = Math.min(stageSize.w / sc, CANVAS_W);
-    const vh = Math.min(stageSize.h / sc, CANVAS_H);
-    const data = await api.get<any>(`/canvas/areas?x=${Math.floor(vx)}&y=${Math.floor(vy)}&w=${Math.ceil(vw)}&h=${Math.ceil(vh)}`);
+    const data = await api.get<any>(`/canvas/areas?x=0&y=0&w=${WORLD_W}&h=${WORLD_H}`);
     setAreas(Array.isArray(data) ? data : (data?.areas ?? []));
-  }, [setAreas, stageSize]);
+  }, [setAreas]);
 
-  // ── 4. attachListeners — loadAreas már létezik ────────────────────────────
-  
-    useEffect(() => {
-  if (!connected) return;
-  
-  // Rövid delay hogy a DOM garantáltan megjelenjen
-  const timer = setTimeout(() => {
-    const el = containerRef.current;
-    if (!el) return;
-
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const s = stageRef.current;
-      if (!s) return;
-      const oldScale = s.scaleX();
-      const rect = el.getBoundingClientRect();
-      const ptr = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-      const newScale = Math.max(0.05, Math.min(100, oldScale * (e.deltaY > 0 ? 0.9 : 1.1)));
-      const mpt = { x: (ptr.x - s.x()) / oldScale, y: (ptr.y - s.y()) / oldScale };
-      s.scale({ x: newScale, y: newScale });
-      const newPos = { x: ptr.x - mpt.x * newScale, y: ptr.y - mpt.y * newScale };
-      s.position(newPos);
-      setScale(newScale);
-      setStagePos(newPos);
-    };
-
-    let isPanning = false;
-    let panStart = { x: 0, y: 0 };
-    let stagePanStart = { x: 0, y: 0 };
-
-    const onPointerDown = (e: PointerEvent) => {
-      if (e.button !== 0) return;
-      if (!e.ctrlKey && !e.metaKey) return;
-      e.preventDefault();
-      isPanning = true;
-      panStart = { x: e.clientX, y: e.clientY };
-      const s = stageRef.current;
-      if (s) stagePanStart = { x: s.x(), y: s.y() };
-      el.setPointerCapture(e.pointerId);
-      setIsDragging(true);
-    };
-
-    const onPointerMove = (e: PointerEvent) => {
-      if (!isPanning) return;
-      const s = stageRef.current;
-      if (!s) return;
-      const nx = stagePanStart.x + (e.clientX - panStart.x);
-      const ny = stagePanStart.y + (e.clientY - panStart.y);
-      s.position({ x: nx, y: ny });
-      setStagePos({ x: nx, y: ny });
-    };
-
-    const onPointerUp = () => {
-      if (!isPanning) return;
-      isPanning = false;
-      setIsDragging(false);
-      loadAreas();
-    };
-
-    el.addEventListener("wheel", onWheel, { passive: false });
-    el.addEventListener("pointerdown", onPointerDown);
-    el.addEventListener("pointermove", onPointerMove);
-    el.addEventListener("pointerup", onPointerUp);
-
-    // cleanup visszaadása a setTimeout-on belülről nem lehetséges,
-    // ezért a ref-en tároljuk a cleanup-ot
-    (el as any).__cleanup = () => {
-      el.removeEventListener("wheel", onWheel);
-      el.removeEventListener("pointerdown", onPointerDown);
-      el.removeEventListener("pointermove", onPointerMove);
-      el.removeEventListener("pointerup", onPointerUp);
-    };
-  }, 50);
-
-  return () => {
-    clearTimeout(timer);
-    const el = containerRef.current;
-    if (el && (el as any).__cleanup) {
-      (el as any).__cleanup();
-      delete (el as any).__cleanup;
-    }
-  };
-}, [connected, loadAreas]);
-
-  // ── 5. ResizeObserver ─────────────────────────────────────────────────────
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const obs = new ResizeObserver(() => {
-      const w = el.clientWidth;
-      const h = Math.max(200, Math.round(w * (9 / 16)));
-      setStageSize({ w, h });
-    });
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, []);
-
-  // ── 6. WebSocket + initial load ───────────────────────────────────────────
+  // ── WebSocket + initial load ──────────────────────────────────────────────
   useEffect(() => {
     connectWebSocket();
     loadAreas();
@@ -217,64 +76,242 @@ export function ClaimSection() {
     const off3 = onCanvasEvent("IMAGE_UPLOADED", loadAreas);
     return () => { off1(); off2(); off3(); };
   }, []);
-  
-  // ─── Kijelölés rajzolása ──────────────────────────────────────────────────
-  const getCanvasPos = (e: Konva.KonvaEventObject<MouseEvent>) => {
-    const s = stageRef.current!;
-    const ptr = s.getPointerPosition()!;
-    const sc = s.scaleX(), pos = s.position();
+
+  // ── Preview image betöltése ───────────────────────────────────────────────
+  useEffect(() => {
+    if (!previewImage) { previewImgRef.current = null; return; }
+    const img = new window.Image();
+    img.src = previewImage;
+    img.onload = () => { previewImgRef.current = img; };
+  }, [previewImage]);
+
+  // ── Space billentyű (pan cursor) ──────────────────────────────────────────
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => { if (e.code === "Space") { e.preventDefault(); spacePressedRef.current = true; } };
+    const onKeyUp   = (e: KeyboardEvent) => { if (e.code === "Space") spacePressedRef.current = false; };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup",   onKeyUp);
+    return () => { window.removeEventListener("keydown", onKeyDown); window.removeEventListener("keyup", onKeyUp); };
+  }, []);
+
+  // ── Forbidden flash helper ────────────────────────────────────────────────
+  const triggerForbiddenFlash = useCallback(() => {
+    setShowForbidden(true);
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    hideTimer.current = setTimeout(() => setShowForbidden(false), 800);
+  }, []);
+
+  // ── Canvas rajzolás ───────────────────────────────────────────────────────
+  const draw = useCallback(() => {
+    const canvas = canvasRef.current; if (!canvas) return;
+    const ctx = canvas.getContext("2d"); if (!ctx) return;
+    const W = canvas.width, H = canvas.height;
+    const { x: tx, y: ty, scale } = vtRef.current;
+    const sx = (W / WORLD_W) * scale;
+    const sy = (H / WORLD_H) * scale;
+
+    ctx.clearRect(0, 0, W, H);
+    ctx.save();
+    ctx.translate(tx, ty);
+
+    // Forbidden zóna — csak showForbidden esetén
+    if (showForbidden) {
+      ctx.save();
+      ctx.fillStyle = "rgba(160,20,20,0.65)";
+      ctx.beginPath();
+      drawCapsulePath(ctx, sx, sy, 0, 0);
+      ctx.rect(-tx, -ty, W, H);
+      ctx.fill("evenodd");
+      ctx.restore();
+    }
+
+    // Kapszula clip
+    ctx.save();
+    drawCapsulePath(ctx, sx, sy, 0, 0);
+    ctx.clip();
+
+    ctx.fillStyle = "#060a06";
+    ctx.fillRect(-tx / scale, -ty / scale, W / scale, H / scale);
+
+    // Grid
+    const step = Math.round(WORLD_W / 40) * sx;
+    ctx.strokeStyle = "rgba(20,241,149,0.05)";
+    ctx.lineWidth = 0.5;
+    for (let x = 0; x < WORLD_W * sx; x += step) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, WORLD_H * sy); ctx.stroke(); }
+    for (let y = 0; y < WORLD_H * sy; y += step) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(WORLD_W * sx, y); ctx.stroke(); }
+
+    // Területek
+    (Array.isArray(areas) ? areas : []).forEach((a: Area) => {
+      if (a.status === "FORBIDDEN" || a.status === "RELEASED") return;
+      const cx = a.x * sx, cy = a.y * sy, cw = a.width * sx, ch = a.height * sy;
+      ctx.fillStyle   = a.status === "AT_RISK" ? "rgba(245,158,11,0.5)" : "rgba(153,69,255,0.5)";
+      ctx.strokeStyle = a.status === "AT_RISK" ? "rgba(245,158,11,0.8)" : "rgba(153,69,255,0.8)";
+      ctx.fillRect(cx, cy, cw, ch);
+      ctx.lineWidth = 1;
+      ctx.strokeRect(cx, cy, cw, ch);
+    });
+
+    // Preview
+    if (selection && previewImgRef.current) {
+      ctx.globalAlpha = 0.75;
+      ctx.drawImage(previewImgRef.current, selection.x * sx, selection.y * sy, selection.w * sx, selection.h * sy);
+      ctx.globalAlpha = 1;
+    }
+
+    // Kijelölés
+    if (selection) {
+      const { x, y, w, h } = selection;
+      const valid = isRectInsideCapsule(x, y, w, h);
+      const canCl  = w * h <= availableQuota && w * h > 0;
+      ctx.fillStyle   = (valid && canCl) ? "rgba(20,241,149,0.18)" : "rgba(239,68,68,0.18)";
+      ctx.fillRect(x * sx, y * sy, w * sx, h * sy);
+      ctx.strokeStyle = (valid && canCl) ? "rgba(20,241,149,0.9)" : "rgba(239,68,68,0.9)";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([8, 4]);
+      ctx.strokeRect(x * sx, y * sy, w * sx, h * sy);
+      ctx.setLineDash([]);
+      ctx.fillStyle = (valid && canCl) ? "rgba(20,241,149,0.9)" : "rgba(239,68,68,0.9)";
+      ctx.font = `bold ${Math.max(10, 11 / scale)}px monospace`;
+      ctx.fillText(`${Math.round(w)} × ${Math.round(h)} px`, x * sx + 4, y * sy - 5);
+    }
+
+    ctx.restore(); // clip restore
+
+    // Kapszula stroke (clip-en kívül)
+    drawCapsulePath(ctx, sx, sy, 0, 0);
+    ctx.strokeStyle = "rgba(20,241,149,0.5)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.restore(); // translate restore
+  }, [areas, selection, availableQuota, showForbidden]);
+
+  // ── Resize ────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const canvas = canvasRef.current; if (!canvas) return;
+    const resize = () => {
+      const w = canvas.parentElement?.clientWidth ?? 800;
+      canvas.width  = w;
+      canvas.height = Math.round(w / WORLD_RATIO);
+      draw();
+    };
+    resize();
+    const obs = new ResizeObserver(resize);
+    obs.observe(canvas.parentElement!);
+    return () => obs.disconnect();
+  }, [draw]);
+
+  useEffect(() => { draw(); }, [draw]);
+
+  // ── Wheel (zoom) ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    const canvas = canvasRef.current; if (!canvas) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const cx = (e.clientX - rect.left) * (canvas.width  / rect.width);
+      const cy = (e.clientY - rect.top)  * (canvas.height / rect.height);
+      setViewTransform(prev => {
+        const factor   = e.deltaY > 0 ? 0.9 : 1.1;
+        const newScale = Math.max(0.5, Math.min(20, prev.scale * factor));
+        const nx = cx - (cx - prev.x) * (newScale / prev.scale);
+        const ny = cy - (cy - prev.y) * (newScale / prev.scale);
+        return { x: nx, y: ny, scale: newScale };
+      });
+      triggerForbiddenFlash();
+    };
+    canvas.addEventListener("wheel", onWheel, { passive: false });
+    return () => canvas.removeEventListener("wheel", onWheel);
+  }, [triggerForbiddenFlash]);
+
+  // ── World koordináta ──────────────────────────────────────────────────────
+  const toWorld = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current; if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    const { x: tx, y: ty, scale } = vtRef.current;
+    const W = canvas.width, H = canvas.height;
+    const canvasX = (e.clientX - rect.left) * (W / rect.width);
+    const canvasY = (e.clientY - rect.top)  * (H / rect.height);
+    const worldSx = (W / WORLD_W) * scale;
+    const worldSy = (H / WORLD_H) * scale;
     return {
-      x: Math.max(0, Math.min(Math.floor((ptr.x - pos.x) / sc), CANVAS_W - 1)),
-      y: Math.max(0, Math.min(Math.floor((ptr.y - pos.y) / sc), CANVAS_H - 1)),
+      wx: Math.max(0, Math.min(Math.round((canvasX - tx) / worldSx), WORLD_W - 1)),
+      wy: Math.max(0, Math.min(Math.round((canvasY - ty) / worldSy), WORLD_H - 1)),
     };
   };
 
-  const onMouseDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
-  if (e.evt.button !== 0) return;
-  if (e.evt.ctrlKey || e.evt.metaKey) return; // ← Ctrl = pan, ne rajzoljon
-  if (e.target !== stageRef.current && !(e.target instanceof Konva.Rect && e.target === selRectRef.current)) return;
-  const pos = getCanvasPos(e);
-  setDrawStart(pos);
-  setIsDrawing(true);
-  setSelection({ x: pos.x, y: pos.y, width: 1, height: 1 });
-};
-
-  const onMouseMove = (e: Konva.KonvaEventObject<MouseEvent>) => {
-    if (!isDrawing) return;
-    const pos = getCanvasPos(e);
+  // ── Ratio snap ────────────────────────────────────────────────────────────
+  const applyRatio = (w: number, h: number): [number, number] => {
     const ratio = RATIOS[ratioKey];
-    let w = Math.abs(pos.x - drawStart.x) || 1;
-    let h = Math.abs(pos.y - drawStart.y) || 1;
-    let x = Math.min(pos.x, drawStart.x);
-    let y = Math.min(pos.y, drawStart.y);
-    if (ratio[0]) {
-      [x, y, w, h] = snapToRatio(x, y, w, h, ratio);
+    if (!ratio[0]) return [w, h];
+    return [w, Math.round(w * ratio[1] / ratio[0])];
+  };
+
+  // ── Mouse handlers ────────────────────────────────────────────────────────
+  const onMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    // Middle click VAGY Space+bal gomb = pan
+    if (e.button === 1 || (e.button === 0 && spacePressedRef.current)) {
+      e.preventDefault();
+      panStart.current = { cx: e.clientX, cy: e.clientY, tx: vtRef.current.x, ty: vtRef.current.y };
+      setIsPanning(true);
+      triggerForbiddenFlash();
+      return;
     }
-    setSelection({ x, y, width: w, height: h });
+    if (e.button !== 0) return;
+    const pos = toWorld(e); if (!pos) return;
+    dragStart.current = { wx: pos.wx, wy: pos.wy };
+    setDragging(true);
+    setSelection(null);
+    setValidationError(null);
+  };
+
+  const onMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    // Pan
+    if (isPanning && panStart.current) {
+      const nx = panStart.current.tx + (e.clientX - panStart.current.cx);
+      const ny = panStart.current.ty + (e.clientY - panStart.current.cy);
+      setViewTransform(prev => ({ ...prev, x: nx, y: ny }));
+      triggerForbiddenFlash();
+      return;
+    }
+    // Draw
+    if (!dragging || !dragStart.current) return;
+    const pos = toWorld(e); if (!pos) return;
+    let w = Math.abs(pos.wx - dragStart.current.wx) || 1;
+    let h = Math.abs(pos.wy - dragStart.current.wy) || 1;
+    [w, h] = applyRatio(w, h);
+    setSelection({
+      x: Math.min(dragStart.current.wx, pos.wx),
+      y: Math.min(dragStart.current.wy, pos.wy),
+      w, h,
+    });
   };
 
   const onMouseUp = () => {
-    if (!isDrawing) return;
-    setIsDrawing(false);
-    if (selection && selection.width > 5 && selection.height > 5) {
-      // Jó kijelölés – megmarad
-    } else {
+    // Pan vége
+    if (isPanning) {
+      setIsPanning(false);
+      panStart.current = null;
+      return;
+    }
+    // Draw vége
+    setDragging(false);
+    if (!selection) return;
+    if (selection.w < MIN_PX || selection.h < MIN_PX) {
+      setValidationError(`Minimum kijelölhető méret: ${MIN_PX}×${MIN_PX} px`);
       setSelection(null);
+      return;
+    }
+    if (!isRectInsideCapsule(selection.x, selection.y, selection.w, selection.h)) {
+      setValidationError("A kijelölt terület a kapszulán kívülre esik!");
+      setSelection(null);
+      return;
     }
   };
 
-  const pixelCount = selection ? selection.width * selection.height : 0;
-  const available  = Number(walletData?.availableQuota ?? 0);
-  const canClaim   = pixelCount > 0 && pixelCount <= available;
-
-const previewImgRef = useRef<HTMLImageElement | null>(null);
-
-useEffect(() => {
-  if (!previewImage) { previewImgRef.current = null; return; }
-  const img = new window.Image();
-  img.src = previewImage;
-  img.onload = () => { previewImgRef.current = img; };
-}, [previewImage]);
+  const pixelCount = selection ? selection.w * selection.h : 0;
+  const canClaim   = pixelCount > 0 && pixelCount <= availableQuota &&
+                     !!selection && isRectInsideCapsule(selection.x, selection.y, selection.w, selection.h);
 
   if (!connected) return null;
 
@@ -288,7 +325,7 @@ useEffect(() => {
           </h2>
           {walletData && (
             <p style={{ fontSize: "0.8rem", color: "rgba(20,241,149,0.8)", margin: "0.2rem 0 0" }}>
-              {Number(walletData.availableQuota).toLocaleString()} pixel avaiable for claiming
+              {availableQuota.toLocaleString()} pixel available for claiming
             </p>
           )}
         </div>
@@ -296,33 +333,20 @@ useEffect(() => {
         {/* Képarány választó */}
         <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
           {Object.keys(RATIOS).map(k => (
-            <button
-              key={k}
-              onClick={() => { setRatioKey(k); setSelection(null); }}
-              style={{
-                padding: "0.3rem 0.75rem",
-                borderRadius: "0.4rem",
-                border: "none",
-                cursor: "pointer",
-                fontSize: "0.75rem",
-                fontWeight: 600,
-                background: ratioKey === k ? "#14f195" : "rgba(255,255,255,0.08)",
-                color: ratioKey === k ? "#000" : "rgba(255,255,255,0.6)",
-                transition: "all 0.15s",
-              }}
-            >
-              {k}
-            </button>
-          ))}
-          {selection && (
-            <button
-              onClick={() => setSelection(null)}
+            <button key={k} onClick={() => { setRatioKey(k); setSelection(null); }}
               style={{
                 padding: "0.3rem 0.75rem", borderRadius: "0.4rem", border: "none",
                 cursor: "pointer", fontSize: "0.75rem", fontWeight: 600,
-                background: "rgba(239,68,68,0.2)", color: "#ef4444",
-              }}
-            >
+                background: ratioKey === k ? "#14f195" : "rgba(255,255,255,0.08)",
+                color: ratioKey === k ? "#000" : "rgba(255,255,255,0.6)",
+                transition: "all 0.15s",
+              }}>{k}</button>
+          ))}
+          {selection && (
+            <button onClick={() => setSelection(null)}
+              style={{ padding: "0.3rem 0.75rem", borderRadius: "0.4rem", border: "none",
+                cursor: "pointer", fontSize: "0.75rem", fontWeight: 600,
+                background: "rgba(239,68,68,0.2)", color: "#ef4444" }}>
               ✕ Törlés
             </button>
           )}
@@ -331,12 +355,12 @@ useEffect(() => {
 
       {/* Infó sor */}
       <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.3)", fontFamily: "monospace", display: "flex", gap: "1.5rem", flexWrap: "wrap" }}>
-        <span>Canvas: {CANVAS_W.toLocaleString()} × {CANVAS_H.toLocaleString()} px</span>
-        <span>Zoom: {scale.toFixed(2)}×</span>
+        <span>Canvas: {WORLD_W.toLocaleString()} × {WORLD_H.toLocaleString()} px</span>
+        <span>Zoom: {viewTransform.scale.toFixed(2)}×</span>
         {selection && (
           <>
             <span style={{ color: "rgba(20,241,149,0.7)" }}>
-              Selection: {selection.x},{selection.y} → {selection.width}×{selection.height}
+              Selection: {selection.x},{selection.y} → {selection.w}×{selection.h}
             </span>
             <span style={{ color: canClaim ? "rgba(20,241,149,0.9)" : "rgba(239,68,68,0.9)" }}>
               {pixelCount.toLocaleString()} pixel {canClaim ? "✓" : "— nincs elég quota"}
@@ -346,119 +370,71 @@ useEffect(() => {
       </div>
 
       {/* Canvas */}
-      <div
-  ref={containerRef}
-  style={{
-  width: "100%",
-  position: "relative",
-  borderRadius: "0.75rem",
-  overflow: "hidden",
-  border: "2px solid rgba(20,241,149,0.45)",
-  boxShadow: "0 0 48px rgba(20,241,149,0.06), inset 0 0 0 1px rgba(20,241,149,0.1)",
-  cursor: isDrawing ? "crosshair" : isDragging ? "grabbing" : "crosshair",
-  background: "#060a06",
-}}
->
-        <Stage
-            ref={stageRef}
-            width={stageSize.w}
-            height={stageSize.h}
-            draggable={false}
-            onMouseDown={onMouseDown}
-            onMouseMove={onMouseMove}
-            onMouseUp={onMouseUp}
-            style={{ display: "block", background: "#060a06" }}
-        >
-          {/* Default Background --- FIX?*/}
-          {/*<Layer listening={false}>
-            <Rect x={0} y={0} width={CANVAS_W} height={CANVAS_H} fill="#060a06" />
-          </Layer>*/}
-
-          {/* Grid */}
-          <GridLayer scale={scale} stagePos={stagePos} stageSize={stageSize} />
-
-          {/* Existing Areas */}
-          <Layer listening={false}>
-            {Array.isArray(areas) && areas.map(area => (
-              <AreaRect key={area.id} area={area} />
-            ))}
-          </Layer>
-            <Layer listening={false}>
-  {selection && previewImgRef.current && (
-    <KImage
-      image={previewImgRef.current}
-      x={selection.x} y={selection.y}
-      width={selection.width} height={selection.height}
-      opacity={0.75}
-    />
-  )}
-</Layer>
-          {/* Active Selection */}
-          <Layer>
-            {selection && (
-              <Rect
-                ref={selRectRef}
-                x={selection.x}
-                y={selection.y}
-                width={selection.width}
-                height={selection.height}
-                fill="rgba(20,241,149,0.15)"
-                stroke="#14f195"
-                strokeWidth={2 / scale}
-                dash={[8 / scale, 4 / scale]}
-                listening={false}
-              />
-            )}
-          </Layer>
-        </Stage>
+      <div style={{
+        width: "100%", position: "relative", borderRadius: "0.75rem", overflow: "hidden",
+        border: "2px solid rgba(20,241,149,0.45)",
+        boxShadow: "0 0 48px rgba(20,241,149,0.06), inset 0 0 0 1px rgba(20,241,149,0.1)",
+        background: "#060a06",
+      }}>
+        <canvas
+          ref={canvasRef}
+          style={{
+            display: "block", width: "100%",
+            cursor: isPanning ? "grabbing" : spacePressedRef.current ? "grab" : dragging ? "crosshair" : "cell",
+          }}
+          onMouseDown={onMouseDown}
+          onMouseMove={onMouseMove}
+          onMouseUp={onMouseUp}
+          onMouseLeave={() => { setDragging(false); setIsPanning(false); panStart.current = null; }}
+        />
       </div>
+
+      {/* Validáció hiba */}
+      {validationError && (
+        <div style={{ color: "#f87171", fontSize: "0.78rem", fontFamily: "monospace",
+          background: "rgba(239,68,68,0.1)", borderRadius: "0.5rem",
+          padding: "0.5rem 0.75rem", textAlign: "center" }}>
+          ⚠ {validationError}
+        </div>
+      )}
 
       {/* Legend + Claim Button */}
       <div style={{
         display: "flex", justifyContent: "space-between", alignItems: "center",
-        flexWrap: "wrap", gap: "0.75rem",
-        padding: "0.5rem 0.75rem",
-        background: "rgba(255,255,255,0.03)",
-        borderRadius: "0.5rem",
+        flexWrap: "wrap", gap: "0.75rem", padding: "0.5rem 0.75rem",
+        background: "rgba(255,255,255,0.03)", borderRadius: "0.5rem",
         border: "1px solid rgba(255,255,255,0.06)",
       }}>
         <div style={{ display: "flex", gap: "1.25rem", fontSize: "0.7rem" }}>
-          <span style={{ color: "rgba(220,38,38,0.9)" }}>● Claimed</span>
+          <span style={{ color: "rgba(153,69,255,0.9)" }}>● Claimed</span>
           <span style={{ color: "rgba(245,158,11,0.9)" }}>● At Risk</span>
           <span style={{ color: "rgba(20,241,149,0.7)" }}>● Selected</span>
-          <span style={{ color: "rgba(255,255,255,0.3)" }}>Scroll = Zoom · Ctrl + Drag = Pan · Draw = Select</span>
+          <span style={{ color: "rgba(255,255,255,0.3)" }}>Scroll = Zoom · Space/Middle+Drag = Pan · Draw = Select</span>
         </div>
-
         <button
           disabled={!canClaim}
-          onClick={() => setShowModal(true)}
+          onClick={() => selection && setModalRegion({ x: selection.x, y: selection.y, width: selection.w, height: selection.h })}
           style={{
-            padding: "0.6rem 1.5rem",
-            borderRadius: "0.5rem",
-            border: "none",
+            padding: "0.6rem 1.5rem", borderRadius: "0.5rem", border: "none",
             cursor: canClaim ? "pointer" : "not-allowed",
-            fontWeight: 700,
-            fontSize: "0.9rem",
-            background: canClaim
-              ? "linear-gradient(135deg, #14f195, #9945ff)"
-              : "rgba(255,255,255,0.1)",
+            fontWeight: 700, fontSize: "0.9rem",
+            background: canClaim ? "linear-gradient(135deg,#14f195,#9945ff)" : "rgba(255,255,255,0.1)",
             color: canClaim ? "#000" : "rgba(255,255,255,0.3)",
             transition: "all 0.2s",
-          }}
-        >
+          }}>
           {selection ? `Claim ${pixelCount.toLocaleString()} pixel →` : "Claim pixels"}
         </button>
       </div>
 
       {/* Claim Modal */}
-      {showModal && selection && walletData && (
-  <ClaimModal
-    region={selection}
-    availableQuota={walletData.availableQuota}
-    onClose={() => { setShowModal(false); setPreviewImage(null); }}
-    onImageSelected={(dataUrl) => setPreviewImage(dataUrl)}
-  />
-)}
+      {modalRegion && walletData && (
+        <ClaimModal
+          region={modalRegion}
+          availableQuota={walletData.availableQuota}
+          onClose={() => { setModalRegion(null); setSelection(null); setPreviewImage(null); }}
+          onImageSelected={(dataUrl) => setPreviewImage(dataUrl)}
+        />
+      )}
     </section>
   );
 }

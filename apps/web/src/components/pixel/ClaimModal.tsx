@@ -4,6 +4,7 @@ import { useState, useRef, useCallback } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { api } from "@/lib/api";
 import { CanvasRegion } from "@1bp/shared";
+import { useWalletStore } from "@/store/walletStore";
 import bs58 from "bs58";
 
 
@@ -24,7 +25,7 @@ export function ClaimModal({ region, availableQuota, onClose, onImageSelected }:
   const [error,        setError]        = useState<string | null>(null);
   const [step,         setStep]         = useState<"form" | "confirm" | "done">("form");
   const fileInputRef = useRef<HTMLInputElement>(null);
-
+  const { refreshWalletData } = useWalletStore();
   const pixelCount = region.width * region.height;
   const overQuota  = pixelCount > availableQuota;
   const cantProceed = overQuota || !imageFile;
@@ -118,6 +119,7 @@ export function ClaimModal({ region, availableQuota, onClose, onImageSelected }:
         const data = await res.json().catch(() => ({}));
         throw new Error(data?.error ?? `HTTP ${res.status}`);
       }
+      await refreshWalletData(address);
 
       setStep("done");
     } catch (err: any) {
