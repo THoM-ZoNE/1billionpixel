@@ -7,9 +7,6 @@ import {
   drawCapsulePath,
 } from "@/lib/capsuleConfig";
 
-const LOUPE_SIZE = 160;
-const LOUPE_ZOOM = 4;
-
 export function PumpCapsule() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const loupeRef  = useRef<HTMLCanvasElement>(null);
@@ -119,31 +116,6 @@ export function PumpCapsule() {
   return () => window.removeEventListener("resize", resizeAndDraw);
 }, [drawMain]);
 
-  // ─── Loupe ───────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    const loupe  = loupeRef.current;
-    const canvas = canvasRef.current;
-    if (!loupe || !canvas || !mouse) return;
-    const ctx = loupe.getContext("2d"); if (!ctx) return;
-    const half = LOUPE_SIZE / 2;
-    ctx.clearRect(0, 0, LOUPE_SIZE, LOUPE_SIZE);
-    ctx.save();
-    ctx.beginPath(); ctx.arc(half, half, half, 0, Math.PI * 2); ctx.clip();
-    ctx.drawImage(canvas,
-      mouse.x - half / LOUPE_ZOOM, mouse.y - half / LOUPE_ZOOM,
-      LOUPE_SIZE / LOUPE_ZOOM, LOUPE_SIZE / LOUPE_ZOOM,
-      0, 0, LOUPE_SIZE, LOUPE_SIZE
-    );
-    ctx.restore();
-    ctx.beginPath(); ctx.arc(half, half, half - 1, 0, Math.PI * 2);
-    ctx.strokeStyle = "rgba(153,69,255,0.9)"; ctx.lineWidth = 2; ctx.stroke();
-    ctx.strokeStyle = "rgba(255,255,255,0.4)"; ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(half, half - 10); ctx.lineTo(half, half + 10);
-    ctx.moveTo(half - 10, half); ctx.lineTo(half + 10, half);
-    ctx.stroke();
-  }, [mouse]);
-
   // ─── Mouse ───────────────────────────────────────────────────────────────────
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current!;
@@ -170,26 +142,13 @@ export function PumpCapsule() {
       <div style={{ position: "relative", width: "100%" }}>
         <canvas
           ref={canvasRef}
-          style={{ display: "block", width: "100%", height: "auto", cursor: "crosshair" }}
+          width={800}
+          height={Math.round(800 / WORLD_RATIO)}
+          style={{ display: "block", width: "100%", height: "auto"}}
           onMouseMove={handleMouseMove}
           onMouseLeave={() => setMouse(null)}
           onClick={handleClick}
         />
-        {mouse && (
-          <canvas
-            ref={loupeRef}
-            width={LOUPE_SIZE}
-            height={LOUPE_SIZE}
-            style={{
-              position: "absolute",
-              left: `calc(${loupeLeft}% + 16px)`,
-              top:  `calc(${loupeTop}% - ${LOUPE_SIZE / 2}px)`,
-              pointerEvents: "none",
-              borderRadius: "50%",
-              boxShadow: "0 0 12px rgba(153,69,255,0.7)",
-            }}
-          />
-        )}
       </div>
     </div>
   );

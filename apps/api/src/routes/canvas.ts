@@ -98,6 +98,7 @@ const canvasRoutes: FastifyPluginAsync = async (app) => {
           imageUrl,
           imageKey,
           imageType,
+          link: fields.link ?? undefined,
         });
 
         return reply.status(201).send({

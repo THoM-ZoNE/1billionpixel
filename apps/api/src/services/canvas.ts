@@ -58,6 +58,7 @@ export async function getCanvasAreas(params: {
       imageUrl: true,
       walletAddress: true,
       status: true,
+      link: true,
     },
   });
 
@@ -156,6 +157,7 @@ export async function claimArea(input: ClaimAreaInput) {
         imageUrl: input.imageUrl ?? null,
         imageKey: input.imageKey ?? null,
         imageType: input.imageType ?? null,
+        link: input.link ?? null,
         status: "ACTIVE",
       },
     });

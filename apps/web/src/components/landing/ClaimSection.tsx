@@ -432,6 +432,7 @@ export function ClaimSection() {
           region={modalRegion}
           availableQuota={walletData.availableQuota}
           onClose={() => { setModalRegion(null); setSelection(null); setPreviewImage(null); }}
+          onSuccess={loadAreas}
           onImageSelected={(dataUrl) => setPreviewImage(dataUrl)}
         />
       )}

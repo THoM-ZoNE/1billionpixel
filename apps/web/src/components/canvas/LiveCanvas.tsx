@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useCallback, useState } from "react";
+import { onCanvasEvent, connectWebSocket } from "@/lib/websocket";
 import { api } from "@/lib/api";
 import {
   WORLD_W, WORLD_H, WORLD_RATIO,
@@ -7,7 +8,7 @@ import {
   canvasToWorld,
 } from "@/lib/capsuleConfig";
 
-const POLL_MS    = 10000;
+const POLL_MS    = 30_000;
 const LOUPE_SIZE = 160;
 const LOUPE_ZOOM = 5;
 
@@ -216,7 +217,20 @@ export function LiveCanvas() {
     const iv = setInterval(loadData, POLL_MS);
     return () => clearInterval(iv);
   }, [loadData]);
+  // ── 6b. WebSocket — azonnali frissítés claim után ─────────────────────
+useEffect(() => {
+  connectWebSocket();
 
+  const unsubClaimed  = onCanvasEvent("AREA_CLAIMED",   () => loadData());
+  const unsubUploaded = onCanvasEvent("IMAGE_UPLOADED",  () => loadData());
+  const unsubUpdate   = onCanvasEvent("CANVAS_UPDATE",   () => loadData());
+
+  return () => {
+    unsubClaimed();
+    unsubUploaded();
+    unsubUpdate();
+  };
+}, [loadData]);
   // ── 7. Resize ──────────────────────────────────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current; if (!canvas) return;
@@ -341,7 +355,7 @@ const onTouchEnd = () => {
   return (
     <div style={{ minHeight: "100vh", background: "#060a06", display: "flex", flexDirection: "column" }}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.75rem 1.5rem", borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(6,10,6,0.97)", position: "sticky", top: 0, zIndex: 100 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1.5rem 1.5rem", borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(6,10,6,1)", position: "sticky", top: 0, zIndex: 100 }}>
         <a href="/" style={{ fontFamily: "monospace", fontSize: "0.85rem", color: "#14f195", textDecoration: "none", letterSpacing: "0.15em" }}>{"← 1BP.FUN"}</a>
         <div style={{ display: "flex", alignItems: "center", gap: "1.5rem" }}>
           <span style={{ fontSize: "0.65rem", color: "rgba(20,241,149,0.7)", fontFamily: "monospace", display: "flex", alignItems: "center", gap: "0.4rem" }}>
@@ -353,18 +367,27 @@ const onTouchEnd = () => {
       </div>
 
       {/* Canvas area */}
-      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", position: "relative" }}>
+      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", backgroundColor: "transparent" }}>
+        <div className="capsule-glow-wrapper live-canvas-glow" style={{
+      position: "relative",   /* bezárja a ::before-t */
+      display: "inline-flex", /* pontosan akkora, mint a canvas */
+      lineHeight: 0,          /* nincs extra whitespace */
+        }}>
         <canvas
           ref={canvasRef}
           width={800}
           height={Math.round(800 / WORLD_RATIO)}
-          style={{ cursor: isDragging.current ? "grabbing" : "crosshair", display: "block", maxWidth: "100%", maxHeight: "calc(100vh - 120px)", imageRendering: "pixelated", filter: "drop-shadow(0 0 40px rgba(20,241,149,0.08))" }}
+          style={{ cursor: isDragging.current ? "grabbing" : "crosshair", display: "block", maxWidth: "100%", maxHeight: "calc(100vh - 120px)", imageRendering: "pixelated", touchAction: "none", }}
           onMouseDown={onMouseDown}
           onMouseMove={onMouseMove}
           onMouseUp={onMouseUp}
           onMouseLeave={onMouseLeave}
           onClick={onClick}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
         />
+        </div>
 
         {/* Tooltip */}
         {tooltip && (

@@ -12,10 +12,11 @@ interface ClaimModalProps {
   region: CanvasRegion;
   availableQuota: number;
   onClose: () => void;
+  onSuccess?: () => void;
   onImageSelected?: (dataUrl: string | null) => void;
 }
 
-export function ClaimModal({ region, availableQuota, onClose, onImageSelected }: ClaimModalProps) {
+export function ClaimModal({ region, availableQuota, onClose, onSuccess, onImageSelected }: ClaimModalProps) {
   const wallet = useWallet();
   const [link,         setLink]         = useState("");
   const [imageFile,    setImageFile]    = useState<File | null>(null);
@@ -120,7 +121,7 @@ export function ClaimModal({ region, availableQuota, onClose, onImageSelected }:
         throw new Error(data?.error ?? `HTTP ${res.status}`);
       }
       await refreshWalletData(address);
-
+      onSuccess?.();
       setStep("done");
     } catch (err: any) {
       setError(err?.message ?? "Hiba történt a claim során.");

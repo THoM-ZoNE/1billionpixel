@@ -36,6 +36,7 @@ model PixelArea {
   imageUrl    String?     // R2 public URL
   imageKey    String?     // R2 storage key
   imageType   String?     // jpg | png | gif
+  link        String?
   status      AreaStatus  @default(ACTIVE)
   claimedAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
