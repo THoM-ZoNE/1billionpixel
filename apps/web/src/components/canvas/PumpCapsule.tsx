@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { connectWebSocket, onCanvasEvent } from "@/lib/websocket";
 import { api } from "@/lib/api";
 import {
   WORLD_W, WORLD_H, WORLD_RATIO,
@@ -97,7 +98,30 @@ export function PumpCapsule() {
       })
       .catch(console.error);
   }, []);
+  // ─── Polling + WebSocket refresh ─────────────────────────────────────
+const POLL_MS = 15_000; // 15 másodperc
 
+useEffect(() => {
+  const canvas = canvasRef.current;
+  if (!canvas) return;
+
+  // Polling
+  const interval = setInterval(() => {
+    drawMain(canvas);
+  }, POLL_MS);
+
+  // WebSocket — azonnali frissítés claim után
+  const { connectWebSocket, onCanvasEvent } = require("@/lib/websocket");
+  connectWebSocket();
+  const unsubClaimed  = onCanvasEvent("AREA_CLAIMED",  () => drawMain(canvas));
+  const unsubUploaded = onCanvasEvent("IMAGE_UPLOADED", () => drawMain(canvas));
+
+  return () => {
+    clearInterval(interval);
+    unsubClaimed?.();
+    unsubUploaded?.();
+  };
+}, [drawMain]);
   // ─── Resize ──────────────────────────────────────────────────────────────────
   useEffect(() => {
   const canvas = canvasRef.current; if (!canvas) return;

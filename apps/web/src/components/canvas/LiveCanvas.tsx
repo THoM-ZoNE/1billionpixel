@@ -52,6 +52,8 @@ export function LiveCanvas() {
   const canvasRef   = useRef<HTMLCanvasElement>(null);
   const loupeRef    = useRef<HTMLCanvasElement>(null);
   const imgCache    = useRef<Map<string, HTMLImageElement>>(new Map());
+  const gifAreas = useRef<Set<string>>(new Set());         
+  const rafRef   = useRef<number | null>(null);           
   const isDragging  = useRef(false);
   const dragStart   = useRef({ mx: 0, my: 0, ox: 0, oy: 0 });
   const zoomRef     = useRef(1);
@@ -135,11 +137,18 @@ export function LiveCanvas() {
       if (area.imageUrl) {
         let img = imgCache.current.get(area.imageUrl);
         if (!img) {
-          img = new Image();
-          img.crossOrigin = "anonymous";
-          img.src = area.imageUrl;
-          img.onload = () => draw();
-          imgCache.current.set(area.imageUrl, img);
+  img = new Image();
+  img.crossOrigin = "anonymous";
+  img.src = area.imageUrl;
+  img.onload = () => {
+    // Ha GIF, tegyük fel az animált listára
+    if (area.imageUrl!.toLowerCase().includes(".gif")) {
+      gifAreas.current.add(area.imageUrl!);
+    }
+    draw();
+  };
+  imgCache.current.set(area.imageUrl, img);
+
         }
         if (img.complete && img.naturalWidth > 0) {
           ctx.drawImage(img, sx, sy, sw, sh);
@@ -209,6 +218,8 @@ export function LiveCanvas() {
       setAreas(Array.isArray(ar) ? ar : (ar?.areas ?? []));
       setStats(st);
       setLastUpdate(new Date().toLocaleTimeString("en-EN"));
+      const activeUrls = new Set((Array.isArray(ar) ? ar : (ar?.areas ?? [])).map((a: any) => a.imageUrl).filter(Boolean));
+      gifAreas.current.forEach(url => { if (!activeUrls.has(url)) gifAreas.current.delete(url); });
     } catch (_) {}
   }, []);
 
@@ -231,6 +242,26 @@ useEffect(() => {
     unsubUpdate();
   };
 }, [loadData]);
+  // ── 6c. GIF animáció loop ──────────────────────────────────────────────
+useEffect(() => {
+  let running = true;
+
+  const loop = () => {
+    if (!running) return;
+    // Csak akkor rajzolunk újra, ha van legalább egy GIF terület
+    if (gifAreas.current.size > 0) {
+      draw();
+    }
+    rafRef.current = requestAnimationFrame(loop);
+  };
+
+  rafRef.current = requestAnimationFrame(loop);
+
+  return () => {
+    running = false;
+    if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+  };
+}, [draw]);
   // ── 7. Resize ──────────────────────────────────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current; if (!canvas) return;
