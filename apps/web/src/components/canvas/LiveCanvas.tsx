@@ -1,9 +1,11 @@
 "use client";
 import { useEffect, useRef, useCallback, useState } from "react";
 import { onCanvasEvent, connectWebSocket } from "@/lib/websocket";
+
 import { api } from "@/lib/api";
 import {
   WORLD_W, WORLD_H, WORLD_RATIO,
+  CAPSULE_W, CAPSULE_H, CAPSULE_OFFSET_X, CAPSULE_OFFSET_Y,
   drawCapsulePath,
   canvasToWorld,
 } from "@/lib/capsuleConfig";
@@ -360,8 +362,8 @@ export function LiveCanvas() {
       </div>
 
       {/* Canvas area */}
-      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", backgroundColor: "transparent" }}>
-        <div className="capsule-glow-wrapper live-canvas-glow" style={{ position: "relative", display: "inline-flex", lineHeight: 0, overflow: "hidden" }}>
+<div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", backgroundColor: "transparent" }}>        
+<div className="capsule-glow-wrapper live-canvas-glow" style={{ position: "relative", display: "inline-flex", lineHeight: 0 }}>
           <canvas
             ref={canvasRef}
             width={800}
@@ -379,19 +381,21 @@ export function LiveCanvas() {
 
           {/* GIF overlay-ek — böngésző natívan animálja */}
         <div style={{
-        position: "absolute",
-        inset: 0,
-        overflow: "hidden",
-        pointerEvents: "none",
-        // Kapszula alakú clip — ugyanolyan border-radius mint a canvas kapszulája
-        // Ha a kapszula pill-shape (nagy border-radius), add hozzá:
-        borderRadius: "inherit",
-        }}>
-          {gifOverlays.map((area) => (
-            <img key={area.id} src={area.imageUrl!} alt="" style={getGifStyle(area)} />
-          ))}
-          </div>
-        </div>
+      position: "absolute",
+      // Pontosan a canvas méretét és pozícióját követi
+      top: 0,
+      left: 0,
+      width: "100%",
+      height: "100%",
+      pointerEvents: "none",
+      // Kapszula alakú clip — a capsuleConfig alapján számítva
+      clipPath: "inset(calc(8.33% + 2px) calc(8.33% + 2px) calc(8.33% + 2px) calc(8.33% + 2px) round 17.51% / 41.67%)",
+    }}>
+      {gifOverlays.map((area) => (
+        <img key={area.id} src={area.imageUrl!} alt="" style={getGifStyle(area)} />
+      ))}
+    </div>
+  </div>
 
         {/* Tooltip */}
         {tooltip && (
