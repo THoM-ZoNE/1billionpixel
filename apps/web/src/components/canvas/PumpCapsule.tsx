@@ -125,32 +125,18 @@ useEffect(() => {
   // ─── Resize ──────────────────────────────────────────────────────────────────
  useEffect(() => {
   const canvas = canvasRef.current; if (!canvas) return;
-
-  const draw = (w: number) => {
-    canvas.width  = w;
-    canvas.height = Math.round(w / WORLD_RATIO);
-    drawMain(canvas);
+  const resizeAndDraw = () => {
+    requestAnimationFrame(() => {
+      const parentWidth = canvas.parentElement?.clientWidth ?? 800;
+      if (parentWidth === 0) return;
+      canvas.width  = parentWidth;
+      canvas.height = Math.round(parentWidth / WORLD_RATIO);
+      drawMain(canvas);
+    });
   };
-
-  // Először próbáljuk a capsule-solana-inner-t megtalálni felfelé a DOM-ban
-  const container =
-    canvas.closest(".capsule-solana-inner") as HTMLElement | null
-    ?? canvas.parentElement;
-
-  if (!container) return;
-
-  const ro = new ResizeObserver((entries) => {
-    const w = entries[0].contentRect.width;
-    if (w > 0) draw(w);
-  });
-
-  ro.observe(container);
-
-  // Initial — ha már van méret
-  const w = container.clientWidth;
-  if (w > 0) draw(w);
-
-  return () => ro.disconnect();
+  resizeAndDraw();
+  window.addEventListener("resize", resizeAndDraw);
+  return () => window.removeEventListener("resize", resizeAndDraw);
 }, [drawMain]);
 
   // ─── Mouse ───────────────────────────────────────────────────────────────────
@@ -172,19 +158,19 @@ useEffect(() => {
   const loupeTop  = mouse ? (mouse.y / (canvasRef.current?.height ?? 1)) * 100 : 50;
 
   return (
-    <div
-      style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", cursor: "pointer" }}
-      title="Click to open Live Canvas"
-    >
-      <div style={{ position: "relative", width: "100%" }}>
-        <canvas
-  ref={canvasRef}
-  style={{ display: "block", width: "100%"}}  // ← height: "auto" !
-  onMouseMove={handleMouseMove}
-  onMouseLeave={() => setMouse(null)}
-  onClick={handleClick}
-/>
-      </div>
+  <div
+    style={{ width: "100%", height: "100%", cursor: "pointer" }}
+    title="Click to open Live Canvas"
+  >
+    <div style={{ position: "relative", width: "100%", height: "100%" }}>
+      <canvas
+        ref={canvasRef}
+        style={{ display: "block", width: "100%" }}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={() => setMouse(null)}
+        onClick={handleClick}
+      />
     </div>
-  );
+  </div>
+);
 }
