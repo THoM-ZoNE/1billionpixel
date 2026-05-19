@@ -123,21 +123,34 @@ useEffect(() => {
   };
 }, [drawMain]);
   // ─── Resize ──────────────────────────────────────────────────────────────────
-  useEffect(() => {
+ useEffect(() => {
   const canvas = canvasRef.current; if (!canvas) return;
-  const resizeAndDraw = () => {
-    // Egy frame-et várunk, hogy a CSS aspect-ratio kiszámolódjon
-    requestAnimationFrame(() => {
-      const parentWidth = canvas.parentElement?.clientWidth ?? 800;
-      if (parentWidth === 0) return; // még nem renderelt
-      canvas.width  = parentWidth;
-      canvas.height = Math.round(parentWidth / WORLD_RATIO);
-      drawMain(canvas);
-    });
+
+  const draw = (w: number) => {
+    canvas.width  = w;
+    canvas.height = Math.round(w / WORLD_RATIO);
+    drawMain(canvas);
   };
-  resizeAndDraw();
-  window.addEventListener("resize", resizeAndDraw);
-  return () => window.removeEventListener("resize", resizeAndDraw);
+
+  // Először próbáljuk a capsule-solana-inner-t megtalálni felfelé a DOM-ban
+  const container =
+    canvas.closest(".capsule-solana-inner") as HTMLElement | null
+    ?? canvas.parentElement;
+
+  if (!container) return;
+
+  const ro = new ResizeObserver((entries) => {
+    const w = entries[0].contentRect.width;
+    if (w > 0) draw(w);
+  });
+
+  ro.observe(container);
+
+  // Initial — ha már van méret
+  const w = container.clientWidth;
+  if (w > 0) draw(w);
+
+  return () => ro.disconnect();
 }, [drawMain]);
 
   // ─── Mouse ───────────────────────────────────────────────────────────────────
@@ -165,14 +178,12 @@ useEffect(() => {
     >
       <div style={{ position: "relative", width: "100%" }}>
         <canvas
-          ref={canvasRef}
-          width={800}
-          height={Math.round(800 / WORLD_RATIO)}
-          style={{ display: "block", width: "100%", height: "auto"}}
-          onMouseMove={handleMouseMove}
-          onMouseLeave={() => setMouse(null)}
-          onClick={handleClick}
-        />
+  ref={canvasRef}
+  style={{ display: "block", width: "100%"}}  // ← height: "auto" !
+  onMouseMove={handleMouseMove}
+  onMouseLeave={() => setMouse(null)}
+  onClick={handleClick}
+/>
       </div>
     </div>
   );
