@@ -65,9 +65,7 @@ body { background: #0a0a0a;
   width:100%;
 }
 
-canvas {
-  filter: brightness(1.2); /* 1.0 = eredeti, 1.2 = +20% fényerő */
-}
+
 .capsule-solana-inner {
   border-radius: 996px;
   background: #0a0a0a;
@@ -76,6 +74,13 @@ canvas {
   margin: 3px;               /* 3px offset */
   aspect-ratio: 2.379 / 1;
   position: relative;
+}
+.capsule-solana-inner canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100% !important;
+  height: 100% !important;
 }
 
 @media (max-width: 640px) {

@@ -123,18 +123,20 @@ useEffect(() => {
   };
 }, [drawMain]);
   // ─── Resize ──────────────────────────────────────────────────────────────────
- useEffect(() => {
+useEffect(() => {
   const canvas = canvasRef.current; if (!canvas) return;
   const resizeAndDraw = () => {
-    requestAnimationFrame(() => {
-      const parentWidth = canvas.parentElement?.clientWidth ?? 800;
-      if (parentWidth === 0) return;
-      canvas.width  = parentWidth;
-      canvas.height = Math.round(parentWidth / WORLD_RATIO);
-      drawMain(canvas);
-    });
-  };
-  resizeAndDraw();
+  requestAnimationFrame(() => {
+    const inner = canvas.closest(".capsule-solana-inner") as HTMLElement | null;
+    const w = inner?.clientWidth ?? canvas.parentElement?.clientWidth ?? 800;
+    const h = inner?.clientHeight ?? Math.round(w / WORLD_RATIO);
+    if (w === 0 || h === 0) return;
+    canvas.width  = w;
+    canvas.height = h;
+    drawMain(canvas);
+  });
+};
+  resizeAndDraw();  // ← EZT HAGYTAD KI!
   window.addEventListener("resize", resizeAndDraw);
   return () => window.removeEventListener("resize", resizeAndDraw);
 }, [drawMain]);
