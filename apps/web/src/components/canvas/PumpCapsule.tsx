@@ -126,15 +126,10 @@ useEffect(() => {
 useEffect(() => {
   const canvas = canvasRef.current; if (!canvas) return;
   const resizeAndDraw = () => {
-  requestAnimationFrame(() => {
-    const inner = canvas.closest(".capsule-solana-inner") as HTMLElement | null;
-    const w = inner?.clientWidth ?? canvas.parentElement?.clientWidth ?? 800;
-    const h = inner?.clientHeight ?? Math.round(w / WORLD_RATIO);
-    if (w === 0 || h === 0) return;
-    canvas.width  = w;
-    canvas.height = h;
-    drawMain(canvas);
-  });
+  const w = canvas.parentElement?.clientWidth ?? 800;
+  canvas.width  = w;
+  canvas.height = Math.round(w / WORLD_RATIO);
+  drawMain(canvas);
 };
   resizeAndDraw();  // ← EZT HAGYTAD KI!
   window.addEventListener("resize", resizeAndDraw);
@@ -159,20 +154,15 @@ useEffect(() => {
   const loupeLeft = mouse ? (mouse.x / (canvasRef.current?.width  ?? 1)) * 100 : 50;
   const loupeTop  = mouse ? (mouse.y / (canvasRef.current?.height ?? 1)) * 100 : 50;
 
-  return (
-  <div
-    style={{ width: "100%", height: "100%", cursor: "pointer" }}
-    title="Click to open Live Canvas"
-  >
-    <div style={{ position: "relative", width: "100%", height: "100%" }}>
-      <canvas
-        ref={canvasRef}
-        style={{ display: "block", width: "100%" }}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={() => setMouse(null)}
-        onClick={handleClick}
-      />
-    </div>
+ return (
+  <div style={{ cursor: "pointer" }} title="Click to open Live Canvas">
+    <canvas
+      ref={canvasRef}
+      style={{ display: "block", width: "100%" }}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={() => setMouse(null)}
+      onClick={handleClick}
+    />
   </div>
 );
 }

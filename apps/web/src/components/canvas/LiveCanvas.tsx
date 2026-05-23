@@ -363,12 +363,12 @@ export function LiveCanvas() {
 
       {/* Canvas area */}
 <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", backgroundColor: "transparent" }}>        
-<div className="capsule-glow-wrapper live-canvas-glow" style={{ position: "relative", display: "inline-flex", lineHeight: 0 }}>
+<div className="capsule-glow-wrapper live-canvas-glow" style={{ position: "relative", display: "inline-flex", lineHeight: 0, }}>
           <canvas
             ref={canvasRef}
             width={800}
             height={Math.round(800 / WORLD_RATIO)}
-            style={{ cursor: isDragging.current ? "grabbing" : "crosshair", display: "block", maxWidth: "100%", maxHeight: "calc(100vh - 120px)", imageRendering: "pixelated", touchAction: "none" }}
+            style={{ cursor: isDragging.current ? "grabbing" : "crosshair", display: "block", maxWidth: "100%", maxHeight: "calc(100vh - 120px)", imageRendering: "pixelated", touchAction: "none", position: "relative", }}
             onMouseDown={onMouseDown}
             onMouseMove={onMouseMove}
             onMouseUp={onMouseUp}
@@ -388,6 +388,7 @@ export function LiveCanvas() {
       width: "100%",
       height: "100%",
       pointerEvents: "none",
+      zIndex: 2,
       // Kapszula alakú clip — a capsuleConfig alapján számítva
       clipPath: "inset(calc(8.33% + 2px) calc(8.33% + 2px) calc(8.33% + 2px) calc(8.33% + 2px) round 17.51% / 41.67%)",
     }}>

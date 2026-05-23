@@ -74,14 +74,10 @@ body { background: #0a0a0a;
   margin: 3px;               /* 3px offset */
   aspect-ratio: 2.379 / 1;
   position: relative;
+  height: 0;
+  padding-bottom: calc((1 / 2.379) * (100% - 6px));
 }
-.capsule-solana-inner canvas {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100% !important;
-  height: 100% !important;
-}
+
 
 @media (max-width: 640px) {
   .capsule-glow-wrapper::before {
