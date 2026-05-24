@@ -10,7 +10,22 @@ import { ClaimModal } from "./ClaimModal";
 import { useWalletStore } from "@/store/walletStore";
 
 const MIN_PX = 100; // minimum kijelölhető pixel méret
+const GRID_SNAP = 10;       // world px-ben, grid egység
+const NEIGHBOR_SNAP = 20;   // world px-en belül snapel a szomszédhoz
 
+// Segédfüggvény: grid snap
+const snapToGrid = (v: number) => Math.round(v / GRID_SNAP) * GRID_SNAP;
+
+// Segédfüggvény: szomszéd snap — az összes él koordinátáját vizsgálja
+const snapToNeighbors = (val: number, edges: number[], threshold: number): number => {
+  let best = val;
+  let bestDist = threshold;
+  for (const edge of edges) {
+    const d = Math.abs(val - edge);
+    if (d < bestDist) { bestDist = d; best = edge; }
+  }
+  return best;
+};
 interface Area {
   x: number; y: number; width: number; height: number;
   status: "ACTIVE" | "AT_RISK" | "FORBIDDEN";
@@ -44,7 +59,16 @@ export function ClaimSelector() {
 
     ctx.clearRect(0, 0, W, H);
 
-    // 1) Forbidden sarokzónák (evenodd) — kapszulán kívüli terület piros
+    // 1) Kapszula clip — belső tartalom
+    ctx.save();
+    drawCapsulePath(ctx, sx, sy, 0, 0);
+    ctx.clip();
+    ctx.fillStyle = "#0d0d0d";
+    ctx.fillRect(0, 0, W, H);
+    // ... grid, területek, kijelölés ...
+    ctx.restore();  // ← clip vége
+
+    // 2) Forbidden zóna — clip UTÁN, tehát a fekete tetején látszik
     ctx.save();
     ctx.fillStyle = "rgba(160, 20, 20, 0.65)";
     ctx.beginPath();
@@ -53,14 +77,11 @@ export function ClaimSelector() {
     ctx.fill("evenodd");
     ctx.restore();
 
-    // 2) Kapszula clip — belső tartalom
-    ctx.save();
+    // 3) Kapszula stroke
     drawCapsulePath(ctx, sx, sy, 0, 0);
-    ctx.clip();
-
-    // Fekete háttér
-    ctx.fillStyle = "#0d0d0d";
-    ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = "rgba(20,241,149,0.5)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
 
     // Grid
     const step = Math.round(WORLD_W / 40) * sx;
@@ -81,6 +102,26 @@ export function ClaimSelector() {
       ctx.strokeRect(cx, cy, cw, ch);
     });
 
+    // ── Snap segédvonalak (drag közben) ─────────────────────────────────
+    if (dragging) {
+      ctx.save();
+      ctx.strokeStyle = "rgba(20,241,149,0.15)";
+      ctx.lineWidth = 0.5;
+      ctx.setLineDash([4, 4]);
+      areas.forEach(a => {
+        [a.x, a.x + a.width].forEach(ex => {
+          const px = ex * sx;
+          ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, H); ctx.stroke();
+        });
+        [a.y, a.y + a.height].forEach(ey => {
+          const py = ey * sy;
+          ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(W, py); ctx.stroke();
+        });
+      });
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
     // Kijelölés
     if (selection) {
       const { x, y, w, h } = selection;
@@ -98,12 +139,6 @@ export function ClaimSelector() {
     }
 
     ctx.restore();
-
-    // Kapszula stroke
-    drawCapsulePath(ctx, sx, sy, 0, 0);
-    ctx.strokeStyle = "rgba(20,241,149,0.5)";
-    ctx.lineWidth = 2;
-    ctx.stroke();
   }, [areas, selection]);
 
   // Resize
@@ -123,48 +158,78 @@ export function ClaimSelector() {
   useEffect(() => { draw(); }, [draw]);
 
   // Canvas koordináta → world koordináta
-  const toWorld = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current; if (!canvas) return null;
-    const rect = canvas.getBoundingClientRect();
-    const cx = (e.clientX - rect.left) * (canvas.width / rect.width);
-    const cy = (e.clientY - rect.top) * (canvas.height / rect.height);
-    return {
-      wx: Math.round(cx / (canvas.width / WORLD_W)),
-      wy: Math.round(cy / (canvas.height / WORLD_H)),
-    };
-  };
+  const toWorldSnapped = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const canvas = canvasRef.current; if (!canvas) return null;
+  const rect = canvas.getBoundingClientRect();
+  const cx = (e.clientX - rect.left) * (canvas.width / rect.width);
+  const cy = (e.clientY - rect.top)  * (canvas.height / rect.height);
+  
+  let wx = cx / (canvas.width  / WORLD_W);
+  let wy = cy / (canvas.height / WORLD_H);
+
+  // Szomszéd élek gyűjtése
+  const xEdges: number[] = [];
+  const yEdges: number[] = [];
+  areas.forEach(a => {
+    xEdges.push(a.x, a.x + a.width);
+    yEdges.push(a.y, a.y + a.height);
+  });
+  // 0 és WORLD határok is snap-célpontok
+  xEdges.push(0, WORLD_W);
+  yEdges.push(0, WORLD_H);
+
+  // Neighbor snap (prioritás)
+  wx = snapToNeighbors(wx, xEdges, NEIGHBOR_SNAP);
+  wy = snapToNeighbors(wy, yEdges, NEIGHBOR_SNAP);
+
+  // Ha nem snapelt szomszédhoz → grid snap
+  const snappedToNeighborX = xEdges.some(e => Math.abs(wx - e) < 0.5);
+  const snappedToNeighborY = yEdges.some(e => Math.abs(wy - e) < 0.5);
+  if (!snappedToNeighborX) wx = snapToGrid(wx);
+  if (!snappedToNeighborY) wy = snapToGrid(wy);
+
+  return { wx: Math.round(wx), wy: Math.round(wy) };
+};
 
   const onMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const pos = toWorld(e); if (!pos) return;
+    const pos = toWorldSnapped(e); if (!pos) return;
     dragStart.current = { wx: pos.wx, wy: pos.wy };
     setDragging(true);
     setSelection(null);
     setValidationError(null);
   };
 
+  const selectionRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
+  const rafRef = useRef<number | null>(null);
+
   const onMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!dragging || !dragStart.current) return;
-    const pos = toWorld(e); if (!pos) return;
-    const x = Math.min(dragStart.current.wx, pos.wx);
-    const y = Math.min(dragStart.current.wy, pos.wy);
-    const w = Math.abs(pos.wx - dragStart.current.wx);
-    const h = Math.abs(pos.wy - dragStart.current.wy);
-    setSelection({ x, y, w, h });
-  };
+  if (!dragging || !dragStart.current) return;
+  const pos = toWorldSnapped(e); if (!pos) return;
+  const x = Math.min(dragStart.current.wx, pos.wx);
+  const y = Math.min(dragStart.current.wy, pos.wy);
+  const w = Math.abs(pos.wx - dragStart.current.wx);
+  const h = Math.abs(pos.wy - dragStart.current.wy);
+  selectionRef.current = { x, y, w, h };
+
+  if (rafRef.current) cancelAnimationFrame(rafRef.current);
+  rafRef.current = requestAnimationFrame(() => draw());
+};
 
   const onMouseUp = () => {
-    setDragging(false);
-    if (!selection) return;
-    if (selection.w < MIN_PX || selection.h < MIN_PX) {
-      setValidationError(`Minimum kijelölhető méret: ${MIN_PX}×${MIN_PX} px`);
-      setSelection(null);
-      return;
-    }
-    if (!isRectInsideCapsule(selection.x, selection.y, selection.w, selection.h)) {
-      setValidationError("A kijelölt terület a kapszulán kívülre esik!");
-      setSelection(null);
-      return;
-    }
+  setDragging(false);
+  const sel = selectionRef.current;
+  if (!sel) return;
+  if (sel.w < MIN_PX || sel.h < MIN_PX) {
+    setValidationError(`Minimum kijelölhető méret: ${MIN_PX}×${MIN_PX} px`);
+    selectionRef.current = null;
+    return;
+  }
+  if (!isRectInsideCapsule(sel.x, sel.y, sel.w, sel.h)) {
+    setValidationError("A kijelölt terület a kapszulán kívülre esik!");
+    selectionRef.current = null;
+    return;
+  }
+  setSelection({ ...sel });
     // Megnyitjuk a ClaimModal-t
     setModalRegion({ x: selection.x, y: selection.y, width: selection.w, height: selection.h });
   };
