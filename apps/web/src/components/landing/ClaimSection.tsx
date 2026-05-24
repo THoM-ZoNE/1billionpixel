@@ -24,6 +24,14 @@ const RATIOS: Record<string, [number, number]> = {
 
 const MIN_PX = 10;
 
+const GRID_SNAP     = 10;
+const NEIGHBOR_SNAP = 20;
+const snapToGrid = (v: number) => Math.round(v / GRID_SNAP) * GRID_SNAP;
+const snapToNeighbors = (val: number, edges: number[], threshold: number) => {
+  let best = val, bestDist = threshold;
+  for (const e of edges) { const d = Math.abs(val - e); if (d < bestDist) { bestDist = d; best = e; } }
+  return best;
+};
 interface Area {
   id?: string;
   x: number; y: number; width: number; height: number;
@@ -49,6 +57,9 @@ export function ClaimSection() {
   const [ratioKey,        setRatioKey]        = useState("16:9");
   const [selection,       setSelection]       = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const [dragging,        setDragging]        = useState(false);
+  const draggingRef  = useRef(false);
+  const selectionRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
+  const rafRef       = useRef<number | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [modalRegion,     setModalRegion]     = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [previewImage,    setPreviewImage]    = useState<string | null>(null);
@@ -159,8 +170,9 @@ export function ClaimSection() {
     }
 
     // Kijelölés
-    if (selection) {
-      const { x, y, w, h } = selection;
+    const sel = selectionRef.current ?? selection;
+    if (sel) {
+    const { x, y, w, h } = sel;
       const valid = isRectInsideCapsule(x, y, w, h);
       const canCl  = w * h <= availableQuota && w * h > 0;
       ctx.fillStyle   = (valid && canCl) ? "rgba(20,241,149,0.18)" : "rgba(239,68,68,0.18)";
@@ -184,7 +196,7 @@ export function ClaimSection() {
     ctx.stroke();
 
     ctx.restore(); // translate restore
-  }, [areas, selection, availableQuota, showForbidden]);
+  }, [areas, availableQuota, showForbidden]);
 
   // ── Resize ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -239,7 +251,24 @@ export function ClaimSection() {
       wy: Math.max(0, Math.min(Math.round((canvasY - ty) / worldSy), WORLD_H - 1)),
     };
   };
+  const toWorldSnapped = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const base = toWorld(e); if (!base) return null;
+  let { wx, wy } = base;
 
+  const xEdges: number[] = [0, WORLD_W];
+  const yEdges: number[] = [0, WORLD_H];
+  (Array.isArray(areas) ? areas : []).forEach(a => {
+    xEdges.push(a.x, a.x + a.width);
+    yEdges.push(a.y, a.y + a.height);
+  });
+
+  wx = snapToNeighbors(wx, xEdges, NEIGHBOR_SNAP);
+  wy = snapToNeighbors(wy, yEdges, NEIGHBOR_SNAP);
+  if (!xEdges.some(ex => Math.abs(wx - ex) < 0.5)) wx = snapToGrid(wx);
+  if (!yEdges.some(ey => Math.abs(wy - ey) < 0.5)) wy = snapToGrid(wy);
+
+  return { wx, wy };
+};
   // ── Ratio snap ────────────────────────────────────────────────────────────
   const applyRatio = (w: number, h: number): [number, number] => {
     const ratio = RATIOS[ratioKey];
@@ -248,66 +277,75 @@ export function ClaimSection() {
   };
 
   // ── Mouse handlers ────────────────────────────────────────────────────────
-  const onMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    // Middle click VAGY Space+bal gomb = pan
-    if (e.button === 1 || (e.button === 0 && spacePressedRef.current)) {
-      e.preventDefault();
-      panStart.current = { cx: e.clientX, cy: e.clientY, tx: vtRef.current.x, ty: vtRef.current.y };
-      setIsPanning(true);
-      triggerForbiddenFlash();
-      return;
-    }
-    if (e.button !== 0) return;
-    const pos = toWorld(e); if (!pos) return;
-    dragStart.current = { wx: pos.wx, wy: pos.wy };
-    setDragging(true);
-    setSelection(null);
-    setValidationError(null);
-  };
+const onMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  // Middle click VAGY Space+bal gomb = pan
+  if (e.button === 1 || (e.button === 0 && spacePressedRef.current)) {
+    e.preventDefault();
+    panStart.current = { cx: e.clientX, cy: e.clientY, tx: vtRef.current.x, ty: vtRef.current.y };
+    setIsPanning(true);
+    triggerForbiddenFlash();
+    return;
+  }
+  if (e.button !== 0) return;
+  const pos = toWorldSnapped(e); if (!pos) return;
+  dragStart.current    = { wx: pos.wx, wy: pos.wy };
+  draggingRef.current  = true;
+  selectionRef.current = null;
+  setDragging(true);
+  setSelection(null);
+  setValidationError(null);
+};
 
-  const onMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    // Pan
-    if (isPanning && panStart.current) {
-      const nx = panStart.current.tx + (e.clientX - panStart.current.cx);
-      const ny = panStart.current.ty + (e.clientY - panStart.current.cy);
-      setViewTransform(prev => ({ ...prev, x: nx, y: ny }));
-      triggerForbiddenFlash();
-      return;
-    }
-    // Draw
-    if (!dragging || !dragStart.current) return;
-    const pos = toWorld(e); if (!pos) return;
-    let w = Math.abs(pos.wx - dragStart.current.wx) || 1;
-    let h = Math.abs(pos.wy - dragStart.current.wy) || 1;
-    [w, h] = applyRatio(w, h);
-    setSelection({
-      x: Math.min(dragStart.current.wx, pos.wx),
-      y: Math.min(dragStart.current.wy, pos.wy),
-      w, h,
-    });
+const onMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  // Pan
+  if (isPanning && panStart.current) {
+    const nx = panStart.current.tx + (e.clientX - panStart.current.cx);
+    const ny = panStart.current.ty + (e.clientY - panStart.current.cy);
+    setViewTransform(prev => ({ ...prev, x: nx, y: ny }));
+    triggerForbiddenFlash();
+    return;
+  }
+  // Draw — ref-alapú, nem setState
+  if (!draggingRef.current || !dragStart.current) return;
+  const pos = toWorldSnapped(e); if (!pos) return;
+  let w = Math.abs(pos.wx - dragStart.current.wx) || 1;
+  let h = Math.abs(pos.wy - dragStart.current.wy) || 1;
+  [w, h] = applyRatio(w, h);
+  selectionRef.current = {
+    x: Math.min(dragStart.current.wx, pos.wx),
+    y: Math.min(dragStart.current.wy, pos.wy),
+    w, h,
   };
+  if (rafRef.current) cancelAnimationFrame(rafRef.current);
+  rafRef.current = requestAnimationFrame(() => draw());
+};
 
-  const onMouseUp = () => {
-    // Pan vége
-    if (isPanning) {
-      setIsPanning(false);
-      panStart.current = null;
-      return;
-    }
-    // Draw vége
-    setDragging(false);
-    if (!selection) return;
-    if (selection.w < MIN_PX || selection.h < MIN_PX) {
-      setValidationError(`Minimum kijelölhető méret: ${MIN_PX}×${MIN_PX} px`);
-      setSelection(null);
-      return;
-    }
-    if (!isRectInsideCapsule(selection.x, selection.y, selection.w, selection.h)) {
-      setValidationError("A kijelölt terület a kapszulán kívülre esik!");
-      setSelection(null);
-      return;
-    }
-  };
+const onMouseUp = () => {
+  // Pan vége
+  if (isPanning) {
+    setIsPanning(false);
+    panStart.current = null;
+    return;
+  }
+  // Draw vége
+  draggingRef.current = false;
+  setDragging(false);
+  const sel = selectionRef.current;
+  if (!sel) return;
+  if (sel.w < MIN_PX || sel.h < MIN_PX) {
+    setValidationError(`Minimum kijelölhető méret: ${MIN_PX}×${MIN_PX} px`);
+    selectionRef.current = null;
+    draw();
+    return;
+  }
+  if (!isRectInsideCapsule(sel.x, sel.y, sel.w, sel.h)) {
+    setValidationError("A kijelölt terület a kapszulán kívülre esik!");
+    selectionRef.current = null;
+    draw();
+    return;
+  }
+  setSelection({ ...sel }); // ← csak itt setState, nem drag közben
+};
 
   const pixelCount = selection ? selection.w * selection.h : 0;
   const canClaim   = pixelCount > 0 && pixelCount <= availableQuota &&
@@ -333,7 +371,7 @@ export function ClaimSection() {
         {/* Képarány választó */}
         <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
           {Object.keys(RATIOS).map(k => (
-            <button key={k} onClick={() => { setRatioKey(k); setSelection(null); }}
+            <button key={k} onClick={() => { setRatioKey(k); setSelection(null); selectionRef.current = null; draw(); }}
               style={{
                 padding: "0.3rem 0.75rem", borderRadius: "0.4rem", border: "none",
                 cursor: "pointer", fontSize: "0.75rem", fontWeight: 600,
@@ -343,7 +381,7 @@ export function ClaimSection() {
               }}>{k}</button>
           ))}
           {selection && (
-            <button onClick={() => setSelection(null)}
+            <button onClick={() => { setSelection(null); selectionRef.current = null; draw(); }}
               style={{ padding: "0.3rem 0.75rem", borderRadius: "0.4rem", border: "none",
                 cursor: "pointer", fontSize: "0.75rem", fontWeight: 600,
                 background: "rgba(239,68,68,0.2)", color: "#ef4444" }}>
@@ -385,7 +423,12 @@ export function ClaimSection() {
           onMouseDown={onMouseDown}
           onMouseMove={onMouseMove}
           onMouseUp={onMouseUp}
-          onMouseLeave={() => { setDragging(false); setIsPanning(false); panStart.current = null; }}
+          onMouseLeave={() => {
+          draggingRef.current = false;
+          setDragging(false);
+          setIsPanning(false);
+          panStart.current = null;
+          }}
         />
       </div>
 
