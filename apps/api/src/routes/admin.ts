@@ -139,13 +139,29 @@ const adminRoutes: FastifyPluginAsync = async (app) => {
 );
 
     // DELETE /admin/areas/:id
-    protectedApp.delete<{ Params: { id: string } }>("/areas/:id", async (req, reply) => {
-      const area = await prisma.pixelArea.findUnique({ where: { id: req.params.id } });
-      if (!area) return reply.status(404).send({ error: "Not found" });
-      // await deleteImageFromStorage(area.imageUrl); // ha kell
-      await prisma.pixelArea.delete({ where: { id: req.params.id } });
-      return { ok: true };
-    });
+protectedApp.delete<{ Params: { id: string } }>("/areas/:id", async (req, reply) => {
+  const area = await prisma.pixelArea.findUnique({
+    where: { id: req.params.id },
+  });
+  if (!area) return reply.status(404).send({ error: "Not found" });
+
+  // Tranzakcióban töröl + visszaírja a kvótát
+  await prisma.$transaction([
+    // 1. Area törlése
+    prisma.pixelArea.delete({ where: { id: req.params.id } }),
+
+    // 2. lockedPixels csökkentése + availableQuota visszaírása
+    prisma.wallet.update({
+      where: { address: area.walletAddress },
+      data: {
+        lockedPixels: { decrement: area.pixelCount },
+        availableQuota: { increment: area.pixelCount },
+      },
+    }),
+  ]);
+
+  return { ok: true };
+});
 
     // PATCH /admin/areas/:id/status
     protectedApp.patch<{ Params: { id: string }; Body: { status: string } }>(
@@ -166,14 +182,37 @@ const adminRoutes: FastifyPluginAsync = async (app) => {
 });
 
     // DELETE /admin/forbidden
-    protectedApp.delete("/forbidden", async () => {
-      const { count } = await prisma.pixelArea.deleteMany({
-        where: { status: "FORBIDDEN" },
-      });
-      return { deleted: count };
-    });
+protectedApp.delete("/forbidden", async () => {
+  // Lekérjük az összes forbidden area-t walletcímmel és pixelszámmal
+  const forbiddenAreas = await prisma.pixelArea.findMany({
+    where: { status: "FORBIDDEN" },
+    select: { walletAddress: true, pixelCount: true },
+  });
 
-  }); // ← register lezárása
+  // Wallet-enkénti összegzés
+  const quotaMap = new Map<string, bigint>();
+  for (const a of forbiddenAreas) {
+    quotaMap.set(a.walletAddress, (quotaMap.get(a.walletAddress) ?? 0n) + a.pixelCount);
+  }
+
+  // Tranzakcióban töröl + minden érintett wallet kvótáját visszaírja
+  await prisma.$transaction([
+    prisma.pixelArea.deleteMany({ where: { status: "FORBIDDEN" } }),
+    ...Array.from(quotaMap.entries()).map(([address, pixels]) =>
+      prisma.wallet.update({
+        where: { address },
+        data: {
+          lockedPixels: { decrement: pixels },
+          availableQuota: { increment: pixels },
+        },
+      })
+    ),
+  ]);
+
+  return { deleted: forbiddenAreas.length };
+});
+
+  });
 };
 
 export default adminRoutes;

@@ -104,7 +104,7 @@ const POLL_MS = 15_000; // 15 másodperc
 useEffect(() => {
   const canvas = canvasRef.current;
   if (!canvas) return;
-
+  
   // Polling
   const interval = setInterval(() => {
     drawMain(canvas);
@@ -131,7 +131,7 @@ useEffect(() => {
   canvas.height = Math.round(w / WORLD_RATIO);
   drawMain(canvas);
 };
-  resizeAndDraw();  // ← EZT HAGYTAD KI!
+  resizeAndDraw(); 
   window.addEventListener("resize", resizeAndDraw);
   return () => window.removeEventListener("resize", resizeAndDraw);
 }, [drawMain]);

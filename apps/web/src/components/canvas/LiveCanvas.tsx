@@ -207,19 +207,27 @@ export function LiveCanvas() {
     return () => { unsubClaimed(); unsubUploaded(); unsubUpdate(); };
   }, [loadData]);
 
-  // ── 7. Resize ──────────────────────────────────────────────────────────
-  useEffect(() => {
-    const canvas = canvasRef.current; if (!canvas) return;
-    const resize = () => {
-      const w = canvas.parentElement?.clientWidth ?? 800;
-      canvas.width  = w;
+  // ── 7. Resize ────────────────────────────────────────────────────────────
+useEffect(() => {
+  const canvas = canvasRef.current;
+  const wrapper = wrapperRef.current;
+  if (!canvas || !wrapper) return;
+
+  const resize = () => {
+    requestAnimationFrame(() => {
+      const w = wrapper.getBoundingClientRect().width;
+      if (w === 0) { setTimeout(resize, 100); return; }
+      canvas.width  = Math.round(w);
       canvas.height = Math.round(w / WORLD_RATIO);
       draw();
-    };
-    resize();
-    window.addEventListener("resize", resize);
-    return () => window.removeEventListener("resize", resize);
-  }, [draw]);
+    });
+  };
+
+  resize();
+  const obs = new ResizeObserver(resize);
+  obs.observe(wrapper);
+  return () => obs.disconnect();
+}, [draw]);
 
   // ── 8. Wheel zoom ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -346,7 +354,7 @@ export function LiveCanvas() {
 }, [zoom, offset]);
 
   const zp = Math.round(zoom * 100);
-
+  const wrapperRef = useRef<HTMLDivElement>(null);
   return (
     <div style={{ minHeight: "100vh", background: "#060a06", display: "flex", flexDirection: "column" }}>
       {/* Header */}
@@ -363,7 +371,7 @@ export function LiveCanvas() {
 
       {/* Canvas area */}
 <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", backgroundColor: "transparent" }}>        
-<div className="capsule-glow-wrapper live-canvas-glow" style={{ position: "relative", display: "inline-flex", lineHeight: 0, }}>
+<div ref={wrapperRef} className="capsule-glow-wrapper live-canvas-glow" style={{ position: "relative", display: "inline-flex", lineHeight: 0, margin: "0 auto",}}>
           <canvas
             ref={canvasRef}
             width={800}

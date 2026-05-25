@@ -12,26 +12,22 @@ import {
   drawCapsulePath, isRectInsideCapsule,
 } from "@/lib/capsuleConfig";
 
-// ─── Képarány opciók ──────────────────────────────────────────────────────────
 const RATIOS: Record<string, [number, number]> = {
-  "Free": [0, 0],
-  "1:1":  [1, 1],
-  "4:3":  [4, 3],
-  "16:9": [16, 9],
-  "21:9": [21, 9],
-  "9:16": [9, 16],
+  "Free": [0, 0], "1:1": [1, 1], "4:3": [4, 3],
+  "16:9": [16, 9], "21:9": [21, 9], "9:16": [9, 16],
 };
 
-const MIN_PX = 10;
-
+const MIN_PX        = 10;
 const GRID_SNAP     = 10;
 const NEIGHBOR_SNAP = 20;
-const snapToGrid = (v: number) => Math.round(v / GRID_SNAP) * GRID_SNAP;
+
+const snapToGrid      = (v: number) => Math.round(v / GRID_SNAP) * GRID_SNAP;
 const snapToNeighbors = (val: number, edges: number[], threshold: number) => {
   let best = val, bestDist = threshold;
   for (const e of edges) { const d = Math.abs(val - e); if (d < bestDist) { bestDist = d; best = e; } }
   return best;
 };
+
 interface Area {
   id?: string;
   x: number; y: number; width: number; height: number;
@@ -39,46 +35,85 @@ interface Area {
   imageUrl?: string;
 }
 
+type Sel = { x: number; y: number; w: number; h: number };
+
 export function ClaimSection() {
-  const { connected } = useWallet();
-  const { walletData } = useWalletStore();
+  const { connected }                       = useWallet();
+  const { walletData }                      = useWalletStore();
   const { areas, setAreas, addArea, removeArea } = useCanvasStore();
 
   // ── Refs ──────────────────────────────────────────────────────────────────
-  const canvasRef     = useRef<HTMLCanvasElement>(null);
-  const dragStart     = useRef<{ wx: number; wy: number } | null>(null);
-  const previewImgRef = useRef<HTMLImageElement | null>(null);
-  const panStart      = useRef<{ cx: number; cy: number; tx: number; ty: number } | null>(null);
-  const hideTimer     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const canvasRef       = useRef<HTMLCanvasElement>(null);
+  const dragStart       = useRef<{ wx: number; wy: number } | null>(null);
+  const previewImgRef   = useRef<HTMLImageElement | null>(null);
+  const panStart        = useRef<{ cx: number; cy: number; tx: number; ty: number } | null>(null);
   const spacePressedRef = useRef(false);
-  const vtRef         = useRef({ x: 0, y: 0, scale: 1 });
+  const vtRef           = useRef({ x: 0, y: 0, scale: 1 });
+  const draggingRef     = useRef(false);
+  const selectionRef    = useRef<Sel | null>(null);
+  const rafRef          = useRef<number | null>(null);
+  const isPanningRef    = useRef(false);
+  const isMoveRef       = useRef(false);
+  const moveOffsetRef   = useRef<{ dx: number; dy: number } | null>(null);
 
   // ── State ─────────────────────────────────────────────────────────────────
   const [ratioKey,        setRatioKey]        = useState("16:9");
-  const [selection,       setSelection]       = useState<{ x: number; y: number; w: number; h: number } | null>(null);
-  const [dragging,        setDragging]        = useState(false);
-  const draggingRef  = useRef(false);
-  const selectionRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
-  const rafRef       = useRef<number | null>(null);
+  const [selection,       setSelection]       = useState<Sel | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [modalRegion,     setModalRegion]     = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [previewImage,    setPreviewImage]    = useState<string | null>(null);
-  const [viewTransform,   setViewTransform]   = useState({ x: 0, y: 0, scale: 1 });
-  const [showForbidden,   setShowForbidden]   = useState(false);
-  const [isPanning,       setIsPanning]       = useState(false);
+  const [zoomDisplay,     setZoomDisplay]     = useState(1);
+  const [cursorStyle,     setCursorStyle]     = useState("cell");
 
   const availableQuota = Number(walletData?.availableQuota ?? 0);
 
-  // vtRef szinkronban tartása
-  useEffect(() => { vtRef.current = viewTransform; }, [viewTransform]);
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  const getEdges = useCallback(() => {
+    const xEdges = [0, WORLD_W];
+    const yEdges = [0, WORLD_H];
+    (Array.isArray(areas) ? areas : []).forEach(a => {
+      xEdges.push(a.x, a.x + a.width);
+      yEdges.push(a.y, a.y + a.height);
+    });
+    return { xEdges, yEdges };
+  }, [areas]);
 
-  // ── Területek betöltése ───────────────────────────────────────────────────
+  const overlapsAnyArea = useCallback((x: number, y: number, w: number, h: number): boolean => {
+    return (Array.isArray(areas) ? areas : []).some(a => {
+      if (a.status === "FORBIDDEN" || a.status === "RELEASED") return false;
+      return x < a.x + a.width && x + w > a.x && y < a.y + a.height && y + h > a.y;
+    });
+  }, [areas]);
+
+  const snapPosition = useCallback((x: number, y: number, w: number, h: number): Sel => {
+    const { xEdges, yEdges } = getEdges();
+    const snappedLeft   = snapToNeighbors(x,     xEdges, NEIGHBOR_SNAP);
+    const snappedRight  = snapToNeighbors(x + w, xEdges, NEIGHBOR_SNAP);
+    const snappedTop    = snapToNeighbors(y,     yEdges, NEIGHBOR_SNAP);
+    const snappedBottom = snapToNeighbors(y + h, yEdges, NEIGHBOR_SNAP);
+    const dLeft   = Math.abs(snappedLeft  - x);
+    const dRight  = Math.abs(snappedRight - (x + w));
+    const dTop    = Math.abs(snappedTop   - y);
+    const dBottom = Math.abs(snappedBottom - (y + h));
+    const finalX = dLeft <= dRight
+      ? (dLeft  < NEIGHBOR_SNAP ? snappedLeft      : snapToGrid(x))
+      : (dRight < NEIGHBOR_SNAP ? snappedRight - w : snapToGrid(x));
+    const finalY = dTop <= dBottom
+      ? (dTop    < NEIGHBOR_SNAP ? snappedTop       : snapToGrid(y))
+      : (dBottom < NEIGHBOR_SNAP ? snappedBottom - h : snapToGrid(y));
+    return {
+      x: Math.max(0, Math.min(finalX, WORLD_W - w)),
+      y: Math.max(0, Math.min(finalY, WORLD_H - h)),
+      w, h,
+    };
+  }, [getEdges]);
+
+  // ── Data loading ──────────────────────────────────────────────────────────
   const loadAreas = useCallback(async () => {
     const data = await api.get<any>(`/canvas/areas?x=0&y=0&w=${WORLD_W}&h=${WORLD_H}`);
     setAreas(Array.isArray(data) ? data : (data?.areas ?? []));
   }, [setAreas]);
 
-  // ── WebSocket + initial load ──────────────────────────────────────────────
   useEffect(() => {
     connectWebSocket();
     loadAreas();
@@ -88,7 +123,6 @@ export function ClaimSection() {
     return () => { off1(); off2(); off3(); };
   }, []);
 
-  // ── Preview image betöltése ───────────────────────────────────────────────
   useEffect(() => {
     if (!previewImage) { previewImgRef.current = null; return; }
     const img = new window.Image();
@@ -96,26 +130,29 @@ export function ClaimSection() {
     img.onload = () => { previewImgRef.current = img; };
   }, [previewImage]);
 
-  // ── Space billentyű (pan cursor) ──────────────────────────────────────────
   useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => { if (e.code === "Space") { e.preventDefault(); spacePressedRef.current = true; } };
-    const onKeyUp   = (e: KeyboardEvent) => { if (e.code === "Space") spacePressedRef.current = false; };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code === "Space") {
+        e.preventDefault();
+        spacePressedRef.current = true;
+        if (!isPanningRef.current) setCursorStyle("grab");
+      }
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === "Space") {
+        spacePressedRef.current = false;
+        if (!isPanningRef.current) setCursorStyle("cell");
+      }
+    };
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup",   onKeyUp);
     return () => { window.removeEventListener("keydown", onKeyDown); window.removeEventListener("keyup", onKeyUp); };
   }, []);
 
-  // ── Forbidden flash helper ────────────────────────────────────────────────
-  const triggerForbiddenFlash = useCallback(() => {
-    setShowForbidden(true);
-    if (hideTimer.current) clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => setShowForbidden(false), 800);
-  }, []);
-
-  // ── Canvas rajzolás ───────────────────────────────────────────────────────
+  // ── Draw ──────────────────────────────────────────────────────────────────
   const draw = useCallback(() => {
     const canvas = canvasRef.current; if (!canvas) return;
-    const ctx = canvas.getContext("2d"); if (!ctx) return;
+    const ctx    = canvas.getContext("2d"); if (!ctx) return;
     const W = canvas.width, H = canvas.height;
     const { x: tx, y: ty, scale } = vtRef.current;
     const sx = (W / WORLD_W) * scale;
@@ -125,22 +162,19 @@ export function ClaimSection() {
     ctx.save();
     ctx.translate(tx, ty);
 
-    // Forbidden zóna — csak showForbidden esetén
-    if (showForbidden) {
-      ctx.save();
-      ctx.fillStyle = "rgba(160,20,20,0.65)";
-      ctx.beginPath();
-      drawCapsulePath(ctx, sx, sy, 0, 0);
-      ctx.rect(-tx, -ty, W, H);
-      ctx.fill("evenodd");
-      ctx.restore();
-    }
+    // Forbidden zóna — mindig piros a kapszulán kívül
+    ctx.save();
+    ctx.fillStyle = "rgba(160,20,20,0.65)";
+    ctx.beginPath();
+    drawCapsulePath(ctx, sx, sy, 0, 0);
+    ctx.rect(-tx, -ty, W, H);
+    ctx.fill("evenodd");
+    ctx.restore();
 
     // Kapszula clip
     ctx.save();
     drawCapsulePath(ctx, sx, sy, 0, 0);
     ctx.clip();
-
     ctx.fillStyle = "#060a06";
     ctx.fillRect(-tx / scale, -ty / scale, W / scale, H / scale);
 
@@ -162,41 +196,73 @@ export function ClaimSection() {
       ctx.strokeRect(cx, cy, cw, ch);
     });
 
-    // Preview
-    if (selection && previewImgRef.current) {
+    // Preview + kijelölés
+    const sel = selectionRef.current ?? selection;
+    if (sel && previewImgRef.current) {
       ctx.globalAlpha = 0.75;
-      ctx.drawImage(previewImgRef.current, selection.x * sx, selection.y * sy, selection.w * sx, selection.h * sy);
+      ctx.drawImage(previewImgRef.current, sel.x * sx, sel.y * sy, sel.w * sx, sel.h * sy);
       ctx.globalAlpha = 1;
     }
 
-    // Kijelölés
-    const sel = selectionRef.current ?? selection;
     if (sel) {
-    const { x, y, w, h } = sel;
-      const valid = isRectInsideCapsule(x, y, w, h);
-      const canCl  = w * h <= availableQuota && w * h > 0;
-      ctx.fillStyle   = (valid && canCl) ? "rgba(20,241,149,0.18)" : "rgba(239,68,68,0.18)";
+      const { x, y, w, h } = sel;
+      const valid     = isRectInsideCapsule(x, y, w, h);
+      const noOverlap = !overlapsAnyArea(x, y, w, h);
+      const canCl     = w * h <= availableQuota && w * h > 0;
+      const isOk      = valid && noOverlap && canCl;
+
+      ctx.fillStyle   = isOk ? "rgba(20,241,149,0.18)" : "rgba(239,68,68,0.18)";
       ctx.fillRect(x * sx, y * sy, w * sx, h * sy);
-      ctx.strokeStyle = (valid && canCl) ? "rgba(20,241,149,0.9)" : "rgba(239,68,68,0.9)";
+      ctx.strokeStyle = isOk ? "rgba(20,241,149,0.9)" : "rgba(239,68,68,0.9)";
       ctx.lineWidth = 2;
       ctx.setLineDash([8, 4]);
       ctx.strokeRect(x * sx, y * sy, w * sx, h * sy);
       ctx.setLineDash([]);
-      ctx.fillStyle = (valid && canCl) ? "rgba(20,241,149,0.9)" : "rgba(239,68,68,0.9)";
+
+      // Mozgatás ikon
+      if (!draggingRef.current) {
+        const cx = (x + w / 2) * sx;
+        const cy = (y + h / 2) * sy;
+        ctx.fillStyle = "rgba(20,241,149,0.5)";
+        ctx.font = `${Math.max(12, 14 / scale)}px monospace`;
+        ctx.textAlign = "center";
+        ctx.fillText("✥", cx, cy + 5);
+        ctx.textAlign = "left";
+      }
+
+      // Snap él kiemelés
+      const { xEdges, yEdges } = (() => {
+        const xe = [0, WORLD_W]; const ye = [0, WORLD_H];
+        (Array.isArray(areas) ? areas : []).forEach(a => { xe.push(a.x, a.x + a.width); ye.push(a.y, a.y + a.height); });
+        return { xEdges: xe, yEdges: ye };
+      })();
+      ctx.strokeStyle = "rgba(20,241,149,1)";
+      ctx.lineWidth = 1.5;
+      if (xEdges.some(e => Math.abs(x - e)       <= 1)) { ctx.beginPath(); ctx.moveTo(x * sx,       y * sy); ctx.lineTo(x * sx,       (y + h) * sy); ctx.stroke(); }
+      if (xEdges.some(e => Math.abs((x + w) - e) <= 1)) { ctx.beginPath(); ctx.moveTo((x+w) * sx,   y * sy); ctx.lineTo((x+w) * sx,   (y + h) * sy); ctx.stroke(); }
+      if (yEdges.some(e => Math.abs(y - e)        <= 1)) { ctx.beginPath(); ctx.moveTo(x * sx,       y * sy); ctx.lineTo((x+w) * sx,   y * sy);       ctx.stroke(); }
+      if (yEdges.some(e => Math.abs((y + h) - e)  <= 1)) { ctx.beginPath(); ctx.moveTo(x * sx, (y+h) * sy); ctx.lineTo((x+w) * sx, (y+h) * sy);     ctx.stroke(); }
+
+      // Felirat
+      const label = !valid     ? "Kapszulán kívül!"
+                  : !noOverlap ? "Foglalt területbe lóg!"
+                  : !canCl     ? "Nincs elég quota!"
+                  : `${Math.round(w)} × ${Math.round(h)} px`;
+      ctx.fillStyle = isOk ? "rgba(20,241,149,0.9)" : "rgba(239,68,68,0.9)";
       ctx.font = `bold ${Math.max(10, 11 / scale)}px monospace`;
-      ctx.fillText(`${Math.round(w)} × ${Math.round(h)} px`, x * sx + 4, y * sy - 5);
+      ctx.fillText(label, x * sx + 4, y * sy - 5);
     }
 
     ctx.restore(); // clip restore
 
-    // Kapszula stroke (clip-en kívül)
+    // Kapszula stroke
     drawCapsulePath(ctx, sx, sy, 0, 0);
     ctx.strokeStyle = "rgba(20,241,149,0.5)";
     ctx.lineWidth = 2;
     ctx.stroke();
 
     ctx.restore(); // translate restore
-  }, [areas, availableQuota, showForbidden]);
+  }, [areas, availableQuota, overlapsAnyArea, selection]);
 
   // ── Resize ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -215,7 +281,7 @@ export function ClaimSection() {
 
   useEffect(() => { draw(); }, [draw]);
 
-  // ── Wheel (zoom) ──────────────────────────────────────────────────────────
+  // ── Wheel ─────────────────────────────────────────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current; if (!canvas) return;
     const onWheel = (e: WheelEvent) => {
@@ -223,23 +289,22 @@ export function ClaimSection() {
       const rect = canvas.getBoundingClientRect();
       const cx = (e.clientX - rect.left) * (canvas.width  / rect.width);
       const cy = (e.clientY - rect.top)  * (canvas.height / rect.height);
-      setViewTransform(prev => {
-        const factor   = e.deltaY > 0 ? 0.9 : 1.1;
-        const newScale = Math.max(0.5, Math.min(20, prev.scale * factor));
-        const nx = cx - (cx - prev.x) * (newScale / prev.scale);
-        const ny = cy - (cy - prev.y) * (newScale / prev.scale);
-        return { x: nx, y: ny, scale: newScale };
-      });
-      triggerForbiddenFlash();
+      const { x: px, y: py, scale: ps } = vtRef.current;
+      const factor   = e.deltaY > 0 ? 0.9 : 1.1;
+      const newScale = Math.max(0.5, Math.min(20, ps * factor));
+      vtRef.current  = { x: cx - (cx - px) * (newScale / ps), y: cy - (cy - py) * (newScale / ps), scale: newScale };
+      setZoomDisplay(newScale);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => draw());
     };
     canvas.addEventListener("wheel", onWheel, { passive: false });
     return () => canvas.removeEventListener("wheel", onWheel);
-  }, [triggerForbiddenFlash]);
+  }, [draw]);
 
   // ── World koordináta ──────────────────────────────────────────────────────
   const toWorld = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current; if (!canvas) return null;
-    const rect = canvas.getBoundingClientRect();
+    const rect   = canvas.getBoundingClientRect();
     const { x: tx, y: ty, scale } = vtRef.current;
     const W = canvas.width, H = canvas.height;
     const canvasX = (e.clientX - rect.left) * (W / rect.width);
@@ -251,25 +316,18 @@ export function ClaimSection() {
       wy: Math.max(0, Math.min(Math.round((canvasY - ty) / worldSy), WORLD_H - 1)),
     };
   };
+
   const toWorldSnapped = (e: React.MouseEvent<HTMLCanvasElement>) => {
-  const base = toWorld(e); if (!base) return null;
-  let { wx, wy } = base;
+    const base = toWorld(e); if (!base) return null;
+    let { wx, wy } = base;
+    const { xEdges, yEdges } = getEdges();
+    wx = snapToNeighbors(wx, xEdges, NEIGHBOR_SNAP);
+    wy = snapToNeighbors(wy, yEdges, NEIGHBOR_SNAP);
+    if (!xEdges.some(ex => Math.abs(wx - ex) < 0.5)) wx = snapToGrid(wx);
+    if (!yEdges.some(ey => Math.abs(wy - ey) < 0.5)) wy = snapToGrid(wy);
+    return { wx, wy };
+  };
 
-  const xEdges: number[] = [0, WORLD_W];
-  const yEdges: number[] = [0, WORLD_H];
-  (Array.isArray(areas) ? areas : []).forEach(a => {
-    xEdges.push(a.x, a.x + a.width);
-    yEdges.push(a.y, a.y + a.height);
-  });
-
-  wx = snapToNeighbors(wx, xEdges, NEIGHBOR_SNAP);
-  wy = snapToNeighbors(wy, yEdges, NEIGHBOR_SNAP);
-  if (!xEdges.some(ex => Math.abs(wx - ex) < 0.5)) wx = snapToGrid(wx);
-  if (!yEdges.some(ey => Math.abs(wy - ey) < 0.5)) wy = snapToGrid(wy);
-
-  return { wx, wy };
-};
-  // ── Ratio snap ────────────────────────────────────────────────────────────
   const applyRatio = (w: number, h: number): [number, number] => {
     const ratio = RATIOS[ratioKey];
     if (!ratio[0]) return [w, h];
@@ -277,79 +335,126 @@ export function ClaimSection() {
   };
 
   // ── Mouse handlers ────────────────────────────────────────────────────────
-const onMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-  // Middle click VAGY Space+bal gomb = pan
-  if (e.button === 1 || (e.button === 0 && spacePressedRef.current)) {
-    e.preventDefault();
-    panStart.current = { cx: e.clientX, cy: e.clientY, tx: vtRef.current.x, ty: vtRef.current.y };
-    setIsPanning(true);
-    triggerForbiddenFlash();
-    return;
-  }
-  if (e.button !== 0) return;
-  const pos = toWorldSnapped(e); if (!pos) return;
-  dragStart.current    = { wx: pos.wx, wy: pos.wy };
-  draggingRef.current  = true;
-  selectionRef.current = null;
-  setDragging(true);
-  setSelection(null);
-  setValidationError(null);
-};
+  const onMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (e.button === 1 || (e.button === 0 && spacePressedRef.current)) {
+      e.preventDefault();
+      panStart.current     = { cx: e.clientX, cy: e.clientY, tx: vtRef.current.x, ty: vtRef.current.y };
+      isPanningRef.current = true;
+      setCursorStyle("grabbing");
+      return;
+    }
+    if (e.button !== 0) return;
+    const pos = toWorldSnapped(e); if (!pos) return;
+    const sel = selectionRef.current ?? selection;
 
-const onMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-  // Pan
-  if (isPanning && panStart.current) {
-    const nx = panStart.current.tx + (e.clientX - panStart.current.cx);
-    const ny = panStart.current.ty + (e.clientY - panStart.current.cy);
-    setViewTransform(prev => ({ ...prev, x: nx, y: ny }));
-    triggerForbiddenFlash();
-    return;
-  }
-  // Draw — ref-alapú, nem setState
-  if (!draggingRef.current || !dragStart.current) return;
-  const pos = toWorldSnapped(e); if (!pos) return;
-  let w = Math.abs(pos.wx - dragStart.current.wx) || 1;
-  let h = Math.abs(pos.wy - dragStart.current.wy) || 1;
-  [w, h] = applyRatio(w, h);
-  selectionRef.current = {
-    x: Math.min(dragStart.current.wx, pos.wx),
-    y: Math.min(dragStart.current.wy, pos.wy),
-    w, h,
+    // Mozgatás ha a kijelölésen belül kattint
+    if (sel && pos.wx >= sel.x && pos.wx <= sel.x + sel.w && pos.wy >= sel.y && pos.wy <= sel.y + sel.h) {
+      isMoveRef.current     = true;
+      draggingRef.current   = true;
+      moveOffsetRef.current = { dx: pos.wx - sel.x, dy: pos.wy - sel.y };
+      setCursorStyle("grabbing");
+      return;
+    }
+
+    // Új kijelölés
+    isMoveRef.current    = false;
+    dragStart.current    = { wx: pos.wx, wy: pos.wy };
+    draggingRef.current  = true;
+    selectionRef.current = null;
+    setSelection(null);
+    setValidationError(null);
+    setCursorStyle("crosshair");
   };
-  if (rafRef.current) cancelAnimationFrame(rafRef.current);
-  rafRef.current = requestAnimationFrame(() => draw());
-};
 
-const onMouseUp = () => {
-  // Pan vége
-  if (isPanning) {
-    setIsPanning(false);
-    panStart.current = null;
-    return;
-  }
-  // Draw vége
-  draggingRef.current = false;
-  setDragging(false);
-  const sel = selectionRef.current;
-  if (!sel) return;
-  if (sel.w < MIN_PX || sel.h < MIN_PX) {
-    setValidationError(`Minimum kijelölhető méret: ${MIN_PX}×${MIN_PX} px`);
-    selectionRef.current = null;
-    draw();
-    return;
-  }
-  if (!isRectInsideCapsule(sel.x, sel.y, sel.w, sel.h)) {
-    setValidationError("A kijelölt terület a kapszulán kívülre esik!");
-    selectionRef.current = null;
-    draw();
-    return;
-  }
-  setSelection({ ...sel }); // ← csak itt setState, nem drag közben
-};
+  const onMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    // Pan
+    if (isPanningRef.current && panStart.current) {
+      vtRef.current = {
+        ...vtRef.current,
+        x: panStart.current.tx + (e.clientX - panStart.current.cx),
+        y: panStart.current.ty + (e.clientY - panStart.current.cy),
+      };
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => draw());
+      return;
+    }
 
+    // Cursor hover frissítés (csak ha nem húzunk)
+    if (!draggingRef.current) {
+      const pos = toWorld(e);
+      const sel = selectionRef.current ?? selection;
+      if (pos && sel && pos.wx >= sel.x && pos.wx <= sel.x + sel.w && pos.wy >= sel.y && pos.wy <= sel.y + sel.h) {
+        setCursorStyle("grab");
+      } else {
+        setCursorStyle(spacePressedRef.current ? "grab" : "cell");
+      }
+      return;
+    }
+
+    const pos = toWorldSnapped(e); if (!pos) return;
+
+    // Mozgatás
+    if (isMoveRef.current && moveOffsetRef.current) {
+      const sel = selectionRef.current ?? selection;
+      if (!sel) return;
+      const rawX = Math.max(0, Math.min(pos.wx - moveOffsetRef.current.dx, WORLD_W - sel.w));
+      const rawY = Math.max(0, Math.min(pos.wy - moveOffsetRef.current.dy, WORLD_H - sel.h));
+      selectionRef.current = snapPosition(rawX, rawY, sel.w, sel.h);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => draw());
+      return;
+    }
+
+    // Új kijelölés rajzolás
+    if (!dragStart.current) return;
+    let w = Math.abs(pos.wx - dragStart.current.wx) || 1;
+    let h = Math.abs(pos.wy - dragStart.current.wy) || 1;
+    [w, h] = applyRatio(w, h);
+    selectionRef.current = {
+      x: Math.min(dragStart.current.wx, pos.wx),
+      y: Math.min(dragStart.current.wy, pos.wy),
+      w, h,
+    };
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(() => draw());
+  };
+
+  const onMouseUp = () => {
+    if (isPanningRef.current) {
+      isPanningRef.current = false;
+      panStart.current     = null;
+      setCursorStyle("cell");
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => draw());
+      return;
+    }
+    draggingRef.current   = false;
+    isMoveRef.current     = false;
+    moveOffsetRef.current = null;
+    setCursorStyle("cell");
+    const sel = selectionRef.current;
+    if (!sel) return;
+    if (sel.w < MIN_PX || sel.h < MIN_PX) {
+      setValidationError(`Minimum kijelölhető méret: ${MIN_PX}×${MIN_PX} px`);
+      selectionRef.current = null; draw(); return;
+    }
+    if (!isRectInsideCapsule(sel.x, sel.y, sel.w, sel.h)) {
+      setValidationError("A kijelölt terület a kapszulán kívülre esik!");
+      selectionRef.current = null; draw(); return;
+    }
+    if (overlapsAnyArea(sel.x, sel.y, sel.w, sel.h)) {
+      setValidationError("A kijelölt terület egy már foglalt területbe lóg!");
+      selectionRef.current = null; draw(); return;
+    }
+    setSelection({ ...sel });
+  };
+
+  // ── Computed ──────────────────────────────────────────────────────────────
   const pixelCount = selection ? selection.w * selection.h : 0;
-  const canClaim   = pixelCount > 0 && pixelCount <= availableQuota &&
-                     !!selection && isRectInsideCapsule(selection.x, selection.y, selection.w, selection.h);
+  const canClaim   = pixelCount > 0 && pixelCount <= availableQuota
+                  && !!selection
+                  && isRectInsideCapsule(selection.x, selection.y, selection.w, selection.h)
+                  && !overlapsAnyArea(selection.x, selection.y, selection.w, selection.h);
 
   if (!connected) return null;
 
@@ -358,30 +463,28 @@ const onMouseUp = () => {
       {/* Fejléc */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.75rem" }}>
         <div>
-          <h2 style={{ fontSize: "1.25rem", fontWeight: 700, color: "white", margin: 0 }}>
-            Claim Your Pixels
-          </h2>
+          <h2 style={{ fontSize: "1.25rem", fontWeight: 700, color: "white", margin: 0 }}>Claim Your Pixels</h2>
           {walletData && (
             <p style={{ fontSize: "0.8rem", color: "rgba(20,241,149,0.8)", margin: "0.2rem 0 0" }}>
               {availableQuota.toLocaleString()} pixel available for claiming
             </p>
           )}
         </div>
-
-        {/* Képarány választó */}
         <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
           {Object.keys(RATIOS).map(k => (
-            <button key={k} onClick={() => { setRatioKey(k); setSelection(null); selectionRef.current = null; draw(); }}
+            <button key={k}
+              onClick={() => { setRatioKey(k); setSelection(null); selectionRef.current = null; draw(); }}
               style={{
                 padding: "0.3rem 0.75rem", borderRadius: "0.4rem", border: "none",
                 cursor: "pointer", fontSize: "0.75rem", fontWeight: 600,
                 background: ratioKey === k ? "#14f195" : "rgba(255,255,255,0.08)",
-                color: ratioKey === k ? "#000" : "rgba(255,255,255,0.6)",
+                color:      ratioKey === k ? "#000"    : "rgba(255,255,255,0.6)",
                 transition: "all 0.15s",
               }}>{k}</button>
           ))}
           {selection && (
-            <button onClick={() => { setSelection(null); selectionRef.current = null; draw(); }}
+            <button
+              onClick={() => { setSelection(null); selectionRef.current = null; draw(); }}
               style={{ padding: "0.3rem 0.75rem", borderRadius: "0.4rem", border: "none",
                 cursor: "pointer", fontSize: "0.75rem", fontWeight: 600,
                 background: "rgba(239,68,68,0.2)", color: "#ef4444" }}>
@@ -394,7 +497,7 @@ const onMouseUp = () => {
       {/* Infó sor */}
       <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.3)", fontFamily: "monospace", display: "flex", gap: "1.5rem", flexWrap: "wrap" }}>
         <span>Canvas: {WORLD_W.toLocaleString()} × {WORLD_H.toLocaleString()} px</span>
-        <span>Zoom: {viewTransform.scale.toFixed(2)}×</span>
+        <span>Zoom: {zoomDisplay.toFixed(2)}×</span>
         {selection && (
           <>
             <span style={{ color: "rgba(20,241,149,0.7)" }}>
@@ -416,18 +519,17 @@ const onMouseUp = () => {
       }}>
         <canvas
           ref={canvasRef}
-          style={{
-            display: "block", width: "100%",
-            cursor: isPanning ? "grabbing" : spacePressedRef.current ? "grab" : dragging ? "crosshair" : "cell",
-          }}
+          style={{ display: "block", width: "100%", cursor: cursorStyle }}
           onMouseDown={onMouseDown}
           onMouseMove={onMouseMove}
           onMouseUp={onMouseUp}
           onMouseLeave={() => {
-          draggingRef.current = false;
-          setDragging(false);
-          setIsPanning(false);
-          panStart.current = null;
+            draggingRef.current  = false;
+            isPanningRef.current = false;
+            panStart.current     = null;
+            setCursorStyle("cell");
+            if (rafRef.current) cancelAnimationFrame(rafRef.current);
+            rafRef.current = requestAnimationFrame(() => draw());
           }}
         />
       </div>
@@ -452,7 +554,7 @@ const onMouseUp = () => {
           <span style={{ color: "rgba(153,69,255,0.9)" }}>● Claimed</span>
           <span style={{ color: "rgba(245,158,11,0.9)" }}>● At Risk</span>
           <span style={{ color: "rgba(20,241,149,0.7)" }}>● Selected</span>
-          <span style={{ color: "rgba(255,255,255,0.3)" }}>Scroll = Zoom · Space/Middle+Drag = Pan · Draw = Select</span>
+          <span style={{ color: "rgba(255,255,255,0.3)" }}>Scroll = Zoom · Space/Middle+Drag = Pan · Draw = Select · ✥ = Move</span>
         </div>
         <button
           disabled={!canClaim}
@@ -462,7 +564,7 @@ const onMouseUp = () => {
             cursor: canClaim ? "pointer" : "not-allowed",
             fontWeight: 700, fontSize: "0.9rem",
             background: canClaim ? "linear-gradient(135deg,#14f195,#9945ff)" : "rgba(255,255,255,0.1)",
-            color: canClaim ? "#000" : "rgba(255,255,255,0.3)",
+            color:      canClaim ? "#000" : "rgba(255,255,255,0.3)",
             transition: "all 0.2s",
           }}>
           {selection ? `Claim ${pixelCount.toLocaleString()} pixel →` : "Claim pixels"}
