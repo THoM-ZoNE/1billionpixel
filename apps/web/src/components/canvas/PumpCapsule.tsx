@@ -126,7 +126,12 @@ useEffect(() => {
 useEffect(() => {
   const canvas = canvasRef.current; if (!canvas) return;
   const resizeAndDraw = () => {
-  const w = canvas.parentElement?.clientWidth ?? 800;
+  const canvas = canvasRef.current;
+  if (!canvas) return;
+  // A div szülő szélességét vesszük — ez a kapszula tényleges szélessége
+  const container = canvas.parentElement;
+  const w = Math.floor(container?.getBoundingClientRect().width ?? 800);
+  if (w === 0) { setTimeout(resizeAndDraw, 50); return; }
   canvas.width  = w;
   canvas.height = Math.round(w / WORLD_RATIO);
   drawMain(canvas);
@@ -155,10 +160,10 @@ useEffect(() => {
   const loupeTop  = mouse ? (mouse.y / (canvasRef.current?.height ?? 1)) * 100 : 50;
 
  return (
-  <div style={{ cursor: "pointer" }} title="Click to open Live Canvas">
+  <div style={{ cursor: "pointer",lineHeight: 0, fontSize: 0, }} title="Click to open Live Canvas">
     <canvas
       ref={canvasRef}
-      style={{ display: "block", width: "100%" }}
+      style={{ display: "block", width: "100%", height: "auto" }}
       onMouseMove={handleMouseMove}
       onMouseLeave={() => setMouse(null)}
       onClick={handleClick}
