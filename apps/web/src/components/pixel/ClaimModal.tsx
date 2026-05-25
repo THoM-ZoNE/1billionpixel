@@ -16,7 +16,7 @@ interface ClaimModalProps {
   onImageSelected?: (dataUrl: string | null) => void;
 }
 
-export function ClaimModal({ region, availableQuota, onClose, onSuccess, onImageSelected }: ClaimModalProps) {
+export function ClaimModal({ region, availableQuota, onClose, onImageSelected }: ClaimModalProps) {
   const wallet = useWallet();
   const [link,         setLink]         = useState("");
   const [imageFile,    setImageFile]    = useState<File | null>(null);
@@ -121,7 +121,7 @@ export function ClaimModal({ region, availableQuota, onClose, onSuccess, onImage
         throw new Error(data?.error ?? `HTTP ${res.status}`);
       }
       await refreshWalletData(address);
-      onSuccess?.();
+
       setStep("done");
     } catch (err: any) {
       setError(err?.message ?? "Hiba történt a claim során.");
@@ -204,30 +204,6 @@ const renderError = () => error ? (
     {error}
   </div>
 ) : null;
-  const Header = ({ title, sub }: { title: string; sub?: string }) => (
-    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
-      <div>
-        <h2 style={{ color: "white", margin: 0, fontSize: "1.1rem", fontWeight: 700 }}>{title}</h2>
-        {sub && (
-          <p style={{ color: "rgba(20,241,149,0.7)", fontSize: "0.72rem", fontFamily: "monospace", margin: "0.25rem 0 0" }}>
-            {sub}
-          </p>
-        )}
-      </div>
-      <button
-        onClick={onClose}
-        style={{ background: "none", border: "none", color: "rgba(255,255,255,0.35)", fontSize: "1.3rem", cursor: "pointer", lineHeight: 1, padding: 0 }}
-      >
-        ✕
-      </button>
-    </div>
-  );
-
-  const ErrorBox = () => error ? (
-    <div style={{ color: "#f87171", fontSize: "0.8rem", background: "rgba(239,68,68,0.1)", borderRadius: "0.5rem", padding: "0.5rem 0.75rem" }}>
-      {error}
-    </div>
-  ) : null;
 
   // ── DONE ─────────────────────────────────────────────────────────────────
   if (step === "done") return (
