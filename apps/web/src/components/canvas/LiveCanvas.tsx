@@ -47,6 +47,7 @@ export function LiveCanvas() {
   const dragStart  = useRef({ mx: 0, my: 0, ox: 0, oy: 0 });
   const zoomRef    = useRef(1);
   const offsetRef  = useRef({ x: 0, y: 0 });
+  const wrapperRef = useRef<HTMLDivElement>(null);
 
   // ── 2. State ───────────────────────────────────────────────────────────
   const [areas,       setAreas]       = useState<PixelArea[]>([]);
@@ -214,14 +215,18 @@ useEffect(() => {
   if (!canvas || !wrapper) return;
 
   const resize = () => {
-    requestAnimationFrame(() => {
-      const w = wrapper.getBoundingClientRect().width;
-      if (w === 0) { setTimeout(resize, 100); return; }
-      canvas.width  = Math.round(w);
-      canvas.height = Math.round(w / WORLD_RATIO);
-      draw();
-    });
-  };
+  requestAnimationFrame(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+    const w = wrapper.getBoundingClientRect().width;
+    if (w === 0) { setTimeout(resize, 100); return; }
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    canvas.width  = Math.round(w);
+    canvas.height = Math.round(w / WORLD_RATIO);
+    draw();
+  });
+};
 
   resize();
   const obs = new ResizeObserver(resize);
@@ -354,7 +359,6 @@ useEffect(() => {
 }, [zoom, offset]);
 
   const zp = Math.round(zoom * 100);
-  const wrapperRef = useRef<HTMLDivElement>(null);
   return (
     <div style={{ minHeight: "100vh", background: "#060a06", display: "flex", flexDirection: "column" }}>
       {/* Header */}
@@ -370,34 +374,58 @@ useEffect(() => {
       </div>
 
       {/* Canvas area */}
-<div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", backgroundColor: "transparent" }}>        
-<div ref={wrapperRef} className="capsule-glow-wrapper live-canvas-glow" style={{ position: "relative", display: "inline-flex", lineHeight: 0, margin: "0 auto",}}>
-          <canvas
-            ref={canvasRef}
-            width={800}
-            height={Math.round(800 / WORLD_RATIO)}
-            style={{ cursor: isDragging.current ? "grabbing" : "crosshair", display: "block", maxWidth: "100%", maxHeight: "calc(100vh - 120px)", imageRendering: "pixelated", touchAction: "none", position: "relative", }}
-            onMouseDown={onMouseDown}
-            onMouseMove={onMouseMove}
-            onMouseUp={onMouseUp}
-            onMouseLeave={onMouseLeave}
-            onClick={onClick}
-            onTouchStart={onTouchStart}
-            onTouchMove={onTouchMove}
-            onTouchEnd={onTouchEnd}
-          />
-
-          {/* GIF overlay-ek — böngésző natívan animálja */}
-        <div style={{
-      position: "absolute",
-      // Pontosan a canvas méretét és pozícióját követi
-      top: 0,
-      left: 0,
+<div style={{
+  flex: 1,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  overflow: "hidden",
+  backgroundColor: "transparent",
+  padding: "0 16px",   // ← mobil oldal padding
+  boxSizing: "border-box",
+}}>
+  <div
+    ref={wrapperRef}
+    className="capsule-glow-wrapper live-canvas-glow"
+    style={{
+      position: "relative",
+      display: "inline-flex",
+      lineHeight: 0,
       width: "100%",
-      height: "100%",
+      maxWidth: "100%",
+    }}
+  >
+    <canvas
+      ref={canvasRef}
+      width={800}
+      height={Math.round(800 / WORLD_RATIO)}
+      style={{
+        cursor: isDragging.current ? "grabbing" : "crosshair",
+        display: "block",
+        width: "100%",       // ← CSS szélesség fluid
+        height: "auto",      // ← aspect ratio megtartva
+        maxHeight: "calc(100vh - 120px)",
+        imageRendering: "pixelated",
+        position: "relative",
+        touchAction: "none",
+      }}
+      onMouseDown={onMouseDown}
+      onMouseMove={onMouseMove}
+      onMouseUp={onMouseUp}
+      onMouseLeave={onMouseLeave}
+      onClick={onClick}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+    />
+
+    {/* GIF overlay — változatlan */}
+    <div style={{
+      position: "absolute",
+      top: 0, left: 0,
+      width: "100%", height: "100%",
       pointerEvents: "none",
       zIndex: 2,
-      // Kapszula alakú clip — a capsuleConfig alapján számítva
       clipPath: "inset(calc(8.33% + 2px) calc(8.33% + 2px) calc(8.33% + 2px) calc(8.33% + 2px) round 17.51% / 41.67%)",
     }}>
       {gifOverlays.map((area) => (
