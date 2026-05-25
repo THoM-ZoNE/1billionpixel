@@ -225,8 +225,8 @@ useEffect(() => {
     if (!canvas) return;
 
     // A canvas max 800px széles (asztali), mobilon a rendelkezésre álló szélességre szűkül
-    const newW = Math.min(800, Math.floor(availW));
-    const newH = Math.round(newW / WORLD_RATIO);
+    const newW = Math.floor(availW);
+const newH = Math.round(newW / WORLD_RATIO);
 
     canvas.width  = newW;
     canvas.height = newH;
@@ -399,6 +399,7 @@ useEffect(() => {
     style={{
       position: "relative",
       lineHeight: 0,
+      display: "inline-block",
     }}
   >
     <canvas
