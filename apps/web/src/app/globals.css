@@ -30,7 +30,7 @@ body { background: #0a0a0a;
 /* Solana capsule glow */
 .capsule-glow-wrapper {
   position: relative;
-  width: 100%;
+  
 }
 
 .capsule-glow-wrapper::before {
