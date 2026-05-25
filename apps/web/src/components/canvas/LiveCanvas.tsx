@@ -216,14 +216,20 @@ useEffect(() => {
 
   const resize = () => {
   requestAnimationFrame(() => {
-    const wrapper = wrapperRef.current;
-    if (!wrapper) return;
-    const w = wrapper.getBoundingClientRect().width;
-    if (w === 0) { setTimeout(resize, 100); return; }
+    const outer = wrapperRef.current?.parentElement; // a flex container
+    if (!outer) return;
+    const availW = outer.getBoundingClientRect().width;
+    if (availW === 0) { setTimeout(resize, 100); return; }
+
     const canvas = canvasRef.current;
     if (!canvas) return;
-    canvas.width  = Math.round(w);
-    canvas.height = Math.round(w / WORLD_RATIO);
+
+    // A canvas max 800px széles (asztali), mobilon a rendelkezésre álló szélességre szűkül
+    const newW = Math.min(800, Math.floor(availW));
+    const newH = Math.round(newW / WORLD_RATIO);
+
+    canvas.width  = newW;
+    canvas.height = newH;
     draw();
   });
 };
@@ -383,16 +389,17 @@ useEffect(() => {
   backgroundColor: "transparent",
   padding: "0 16px",   // ← mobil oldal padding
   boxSizing: "border-box",
+  paddingBottom: "48px"
 }}>
   <div
     ref={wrapperRef}
     className="capsule-glow-wrapper live-canvas-glow"
     style={{
       position: "relative",
-      display: "inline-flex",
+      display: "block",
       lineHeight: 0,
-      width: "100%",
-      maxWidth: "100%",
+      margin: "0 auto",      // ← ez hiányzott
+      
     }}
   >
     <canvas
@@ -402,8 +409,7 @@ useEffect(() => {
       style={{
         cursor: isDragging.current ? "grabbing" : "crosshair",
         display: "block",
-        width: "100%",       // ← CSS szélesség fluid
-        height: "auto",      // ← aspect ratio megtartva
+        maxWidth: "100%",
         maxHeight: "calc(100vh - 120px)",
         imageRendering: "pixelated",
         position: "relative",
