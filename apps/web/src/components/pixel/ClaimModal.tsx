@@ -87,7 +87,6 @@ export function ClaimModal({ region, availableQuota, onClose, onImageSelected }:
       if (link.trim()) formData.append("link", link.trim());
       if (imageFile)   formData.append("image", imageFile);
 
-      // skipSignature — aláírás nélkül próbálunk, backend dönti el
       // Ha a wallet skipSignature=true, a middleware engedi át signature nélkül
       let headers: Record<string, string> = {
         "walletaddress": address,
@@ -263,7 +262,7 @@ const renderError = () => error ? (
         {([
           ["Position",  `X: ${region.x}  Y: ${region.y}`],
           ["Size",    `${region.width} × ${region.height} px`],
-          ["Pixels",  `${pixelCount.toLocaleString()} / ${availableQuota.toLocaleString()} avaiable`],
+          ["Pixels",  `${pixelCount.toLocaleString()} / ${availableQuota.toLocaleString()} available`],
           ["Link",     link.trim() || "—"],
           ["Image",      imageFile ? `${imageFile.name} (${(imageFile.size / 1024).toFixed(0)} KB)` : "—"],
         ] as [string, string][]).map(([k, v]) => (
