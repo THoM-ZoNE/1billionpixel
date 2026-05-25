@@ -389,17 +389,16 @@ useEffect(() => {
   backgroundColor: "transparent",
   padding: "0 16px",   // ← mobil oldal padding
   boxSizing: "border-box",
-  paddingBottom: "48px"
+  paddingBottom: "48px",
+  width: "100%",
+  minWidth: 0,
 }}>
   <div
     ref={wrapperRef}
     className="capsule-glow-wrapper live-canvas-glow"
     style={{
       position: "relative",
-      display: "block",
       lineHeight: 0,
-      margin: "0 auto",      // ← ez hiányzott
-      
     }}
   >
     <canvas
