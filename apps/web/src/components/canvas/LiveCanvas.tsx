@@ -9,6 +9,7 @@ import {
   drawCapsulePath,
   canvasToWorld,
 } from "@/lib/capsuleConfig";
+import { useSearchParams } from "next/navigation";
 
 const POLL_MS    = 30_000;
 const LOUPE_SIZE = 160;
@@ -37,7 +38,37 @@ function clampOffset(ox: number, oy: number, zoom: number, W: number, H: number)
   const y = scaledH <= H ? (H - scaledH) / 2 : Math.max(H - scaledH, Math.min(0, oy));
   return { x, y };
 }
+function animateZoomTo(
+  targetWX: number, targetWY: number,
+  targetZoom: number,
+  canvasW: number, canvasH: number,
+  startZoom: number, startOffset: { x: number; y: number },
+  onFrame: (z: number, o: { x: number; y: number }) => void,
+  onDone: () => void
+) {
+  const duration = 1400;
+  const startTime = performance.now();
+  const scaleX = canvasW / WORLD_W;
+  const scaleY = canvasH / WORLD_H;
+  const endZoom = targetZoom;
+  const endOffset = clampOffset(
+    canvasW / 2 - targetWX * scaleX * endZoom,
+    canvasH / 2 - targetWY * scaleY * endZoom,
+    endZoom, canvasW, canvasH
+  );
 
+  function step(now: number) {
+    const t = Math.min((now - startTime) / duration, 1);
+    const e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; // ease in-out cubic
+    const z  = startZoom + (endZoom  - startZoom)  * e;
+    const ox = startOffset.x + (endOffset.x - startOffset.x) * e;
+    const oy = startOffset.y + (endOffset.y - startOffset.y) * e;
+    onFrame(z, { x: ox, y: oy });
+    if (t < 1) requestAnimationFrame(step);
+    else onDone();
+  }
+  requestAnimationFrame(step);
+}
 export function LiveCanvas() {
   // ── 1. Refs ────────────────────────────────────────────────────────────
   const canvasRef  = useRef<HTMLCanvasElement>(null);
@@ -48,6 +79,13 @@ export function LiveCanvas() {
   const zoomRef    = useRef(1);
   const offsetRef  = useRef({ x: 0, y: 0 });
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const pulseStartRef = useRef<number>(0);
+  const rafRef = useRef<number>(0);
+  // ── Focus area (URL paraméterből) ─────────────────────────────────────
+  const focusAreaRef    = useRef<PixelArea | null>(null);
+  const pulseRef = useRef<any>(null);
+  const searchParams    = useSearchParams();
+  const focusAreaId     = searchParams.get("area");
 
   // ── 2. State ───────────────────────────────────────────────────────────
   const [areas,       setAreas]       = useState<PixelArea[]>([]);
@@ -153,9 +191,31 @@ export function LiveCanvas() {
     ctx.strokeStyle = "rgba(20,241,149,0.5)";
     ctx.lineWidth = 2;
     ctx.stroke();
+        // ── Focus pulse highlight ────────────────────────────────────────────
+    // draw()-ban a highlight rész:
+const focusArea = focusAreaRef.current;
+if (focusArea) {
+  if (pulseStartRef.current === 0) pulseStartRef.current = Date.now();
+  const elapsed = (Date.now() - pulseStartRef.current) / 1000;
+  const pulse = (Math.sin(elapsed * Math.PI * 1.2) + 1) / 2; // ~0.6Hz, lassú
+  const fsx = focusArea.x * contentScaleX + ox;
+  const fsy = focusArea.y * contentScaleY + oy;
+  const fsw = focusArea.width  * contentScaleX;
+  const fsh = focusArea.height * contentScaleY;
+  ctx.save();
+  ctx.strokeStyle = `rgba(20, 241, 149, ${0.4 + pulse * 0.6})`;
+  ctx.lineWidth   = 3;
+  ctx.shadowColor = "rgba(20, 241, 149, 0.7)";
+  ctx.shadowBlur  = 6 + pulse * 10;
+  ctx.strokeRect(fsx, fsy, fsw, fsh);
+  ctx.restore();
+} else {
+  pulseStartRef.current = 0; // reset ha nincs focus
+}
   }, [areas, zoom, offset]);
 
   useEffect(() => { draw(); }, [draw]);
+
 
   // ── 5. Loupe ───────────────────────────────────────────────────────────
   useEffect(() => {
@@ -207,7 +267,55 @@ export function LiveCanvas() {
     const unsubUpdate   = onCanvasEvent("CANVAS_UPDATE",  () => loadData());
     return () => { unsubClaimed(); unsubUploaded(); unsubUpdate(); };
   }, [loadData]);
+  // ── Focus area URL paraméterből ────────────────────────────────────────
+useEffect(() => {
+  if (!focusAreaId || areas.length === 0) return;
+  const area = areas.find(a => a.id === focusAreaId);
+  if (!area) return;
+  focusAreaRef.current = area;
+  const canvas = canvasRef.current;
+  if (!canvas) return;
 
+  const timer = setTimeout(() => {
+    const centerWX = area.x + area.width  / 2;
+    const centerWY = area.y + area.height / 2;
+    const targetZoom = Math.min(10, Math.max(4,
+      Math.min(
+        (canvas.width  * 0.3) / (area.width  * (canvas.width  / WORLD_W)),
+        (canvas.height * 0.3) / (area.height * (canvas.height / WORLD_H))
+      )
+    ));
+
+    animateZoomTo(
+      centerWX, centerWY, targetZoom,
+      canvas.width, canvas.height,
+      zoomRef.current, offsetRef.current,
+      (z, o) => {
+        zoomRef.current   = z;
+        offsetRef.current = o;
+        setZoom(z);
+        setOffset(o);
+      },
+      () => {
+        // Csak 5 sec múlva töröljük a focus-t — nincs loop, nincs interferencia
+        const t = setTimeout(() => {
+          focusAreaRef.current = null;
+          pulseStartRef.current = 0;
+          draw();
+        }, 5000);
+        pulseRef.current = t;
+      }
+    );
+  }, 300);
+
+  // ← Ez a cleanup, a useEffect végén, nem az animateZoomTo-n belül
+  return () => {
+    clearTimeout(timer);
+    cancelAnimationFrame(rafRef.current);
+    focusAreaRef.current = null;
+    pulseStartRef.current = 0;
+  };
+}, [focusAreaId, areas, draw]);
   // ── 7. Resize ────────────────────────────────────────────────────────────
 useEffect(() => {
   const canvas = canvasRef.current;
@@ -439,7 +547,36 @@ const newH = Math.round(newW / WORLD_RATIO);
       ))}
     </div>
   </div>
-
+{/* Focus pulse overlay — CSS animáció, nem JS loop */}
+{focusAreaRef.current && (() => {
+  const area = focusAreaRef.current!;
+  const canvas = canvasRef.current;
+  if (!canvas) return null;
+  const W = canvas.width;
+  const H = canvas.height;
+  const cssW = canvas.offsetWidth;
+  const cssH = canvas.offsetHeight;
+  const contentScaleX = (W / WORLD_W) * zoom;
+  const contentScaleY = (H / WORLD_H) * zoom;
+  const scaleX = cssW / W;
+  const scaleY = cssH / H;
+  const left   = (area.x * contentScaleX + offset.x) * scaleX;
+  const top    = (area.y * contentScaleY + offset.y) * scaleY;
+  const width  = area.width  * contentScaleX * scaleX;
+  const height = area.height * contentScaleY * scaleY;
+  return (
+    <div style={{
+      position: "absolute",
+      left, top, width, height,
+      border: "3px solid #14f195",
+      borderRadius: 2,
+      pointerEvents: "none",
+      zIndex: 5,
+      boxShadow: "0 0 12px rgba(20,241,149,0.6), inset 0 0 8px rgba(20,241,149,0.1)",
+      animation: "focusPulse 1.2s ease-in-out infinite",
+    }} />
+  );
+})()}
         {/* Tooltip */}
         {tooltip && (
           <div style={{ position: "fixed", left: tooltip.x + 14, top: tooltip.y - 10, background: "rgba(6,10,6,0.97)", border: "1px solid rgba(20,241,149,0.25)", borderRadius: 6, padding: "0.5rem 0.75rem", pointerEvents: "none", zIndex: 200, minWidth: 160, boxShadow: "0 4px 24px rgba(0,0,0,0.5)" }}>

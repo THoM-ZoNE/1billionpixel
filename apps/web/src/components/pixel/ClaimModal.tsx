@@ -30,6 +30,8 @@ export function ClaimModal({ region, availableQuota, onClose, onImageSelected }:
   const pixelCount = region.width * region.height;
   const overQuota  = pixelCount > availableQuota;
   const cantProceed = overQuota || !imageFile;
+  const [claimedAreaId, setClaimedAreaId] = useState<string | null>(null);
+  const [copied,        setCopied]        = useState(false);
 
   const applyFile = (file: File) => {
     if (!file.type.startsWith("image/")) {
@@ -120,7 +122,8 @@ export function ClaimModal({ region, availableQuota, onClose, onImageSelected }:
         throw new Error(data?.error ?? `HTTP ${res.status}`);
       }
       await refreshWalletData(address);
-
+      const data = await res.json();
+      setClaimedAreaId(data?.id ?? data?.area?.id ?? null);
       setStep("done");
     } catch (err: any) {
       setError(err?.message ?? "Hiba történt a claim során.");
@@ -206,25 +209,79 @@ const renderError = () => error ? (
 
   // ── DONE ─────────────────────────────────────────────────────────────────
   if (step === "done") return (
-    <div style={overlay} onClick={onClose}>
-      <div style={modal} onClick={e => e.stopPropagation()}>
-        <div style={{ textAlign: "center", padding: "1.5rem 0" }}>
-          <div style={{ fontSize: "3.5rem", marginBottom: "0.75rem" }}>🎉</div>
-          <h2 style={{ color: "#14f195", margin: 0, fontSize: "1.4rem" }}>Claimed Successfull!</h2>
-          <p style={{ color: "rgba(255,255,255,0.45)", fontSize: "0.82rem", marginTop: "0.6rem", fontFamily: "monospace", lineHeight: 1.7 }}>
-            {pixelCount.toLocaleString()} pixels reserved<br />
-            ({region.x}, {region.y}) · {region.width} × {region.height} px
-          </p>
-          <button
-            onClick={onClose}
-            style={{ ...btnPrimary(false), marginTop: "1.75rem", width: "100%", flex: "unset" }}
-          >
-            Close
-          </button>
-        </div>
+  <div style={overlay} onClick={onClose}>
+    <div style={modal} onClick={e => e.stopPropagation()}>
+      <div style={{ textAlign: "center", padding: "1.5rem 0" }}>
+        <div style={{ fontSize: "3.5rem", marginBottom: "0.75rem" }}>🎉</div>
+        <h2 style={{ color: "#14f195", margin: 0, fontSize: "1.4rem" }}>Claimed Successfully!</h2>
+        <p style={{ color: "rgba(255,255,255,0.45)", fontSize: "0.82rem", marginTop: "0.6rem", fontFamily: "monospace", lineHeight: 1.7 }}>
+          {pixelCount.toLocaleString()} pixels reserved<br />
+          ({region.x}, {region.y}) · {region.width} × {region.height} px
+        </p>
+
+        {/* Share link */}
+        {claimedAreaId && (
+          <div style={{ marginTop: "1.25rem", display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+            <div style={{
+              display: "flex", alignItems: "center", gap: "0.5rem",
+              background: "rgba(20,241,149,0.06)",
+              border: "1px solid rgba(20,241,149,0.2)",
+              borderRadius: "0.6rem", padding: "0.5rem 0.75rem",
+            }}>
+              <span style={{
+                flex: 1, fontSize: "0.68rem", fontFamily: "monospace",
+                color: "rgba(255,255,255,0.45)", textOverflow: "ellipsis",
+                overflow: "hidden", whiteSpace: "nowrap", textAlign: "left",
+              }}>
+                {`${window.location.origin}/canvas/live?area=${claimedAreaId}`}
+              </span>
+              <button
+                onClick={async () => {
+                  const link = `${window.location.origin}/canvas/live?area=${claimedAreaId}`;
+                  await navigator.clipboard.writeText(link);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+                style={{
+                  background: copied ? "rgba(20,241,149,0.2)" : "rgba(20,241,149,0.1)",
+                  border: "1px solid rgba(20,241,149,0.3)",
+                  borderRadius: "0.4rem", padding: "0.3rem 0.6rem",
+                  color: "#14f195", fontSize: "0.7rem", fontFamily: "monospace",
+                  cursor: "pointer", whiteSpace: "nowrap", transition: "all 0.2s",
+                }}
+              >
+                {copied ? "✓ Copied!" : "📋 Copy link"}
+              </button>
+            </div>
+            <a
+              href={`/canvas/live?area=${claimedAreaId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "block", padding: "0.6rem",
+                background: "rgba(20,241,149,0.08)",
+                border: "1px solid rgba(20,241,149,0.15)",
+                borderRadius: "0.6rem",
+                color: "rgba(20,241,149,0.8)", fontSize: "0.75rem",
+                fontFamily: "monospace", textDecoration: "none",
+                transition: "all 0.2s",
+              }}
+            >
+              🔍 View on Live Canvas →
+            </a>
+          </div>
+        )}
+
+        <button
+          onClick={onClose}
+          style={{ ...btnPrimary(false), marginTop: "1.25rem", width: "100%", flex: "unset" }}
+        >
+          Close
+        </button>
       </div>
     </div>
-  );
+  </div>
+);
 
   // ── CONFIRM ───────────────────────────────────────────────────────────────
  if (step === "confirm") return (

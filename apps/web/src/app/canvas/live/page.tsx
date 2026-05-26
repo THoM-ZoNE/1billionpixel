@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { LiveCanvas } from "@/components/canvas/LiveCanvas";
 
 export const metadata: Metadata = {
@@ -7,5 +8,9 @@ export const metadata: Metadata = {
 };
 
 export default function LiveCanvasPage() {
-  return <LiveCanvas />;
+  return (
+    <Suspense fallback={null}>
+      <LiveCanvas />
+    </Suspense>
+  );
 }
