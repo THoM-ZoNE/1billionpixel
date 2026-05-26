@@ -267,55 +267,62 @@ if (focusArea) {
     const unsubUpdate   = onCanvasEvent("CANVAS_UPDATE",  () => loadData());
     return () => { unsubClaimed(); unsubUploaded(); unsubUpdate(); };
   }, [loadData]);
-  // ── Focus area URL paraméterből ────────────────────────────────────────
-useEffect(() => {
-  if (!focusAreaId || areas.length === 0) return;
-  const area = areas.find(a => a.id === focusAreaId);
-  if (!area) return;
-  focusAreaRef.current = area;
-  const canvas = canvasRef.current;
-  if (!canvas) return;
+    // ── Focus area URL paraméterből ────────────────────────────────────────
+  useEffect(() => {
+    if (!focusAreaId || areas.length === 0) return;
+    const area = areas.find(a => a.id === focusAreaId);
+    if (!area) return;
+    focusAreaRef.current = area;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
-  const timer = setTimeout(() => {
-    const centerWX = area.x + area.width  / 2;
-    const centerWY = area.y + area.height / 2;
-    const targetZoom = Math.min(10, Math.max(4,
-      Math.min(
-        (canvas.width  * 0.3) / (area.width  * (canvas.width  / WORLD_W)),
-        (canvas.height * 0.3) / (area.height * (canvas.height / WORLD_H))
-      )
-    ));
+    const timer = setTimeout(() => {
+      const centerWX = area.x + area.width  / 2;
+      const centerWY = area.y + area.height / 2;
+      const targetZoom = Math.min(10, Math.max(4,
+        Math.min(
+          (canvas.width  * 0.3) / (area.width  * (canvas.width  / WORLD_W)),
+          (canvas.height * 0.3) / (area.height * (canvas.height / WORLD_H))
+        )
+      ));
 
-    animateZoomTo(
-      centerWX, centerWY, targetZoom,
-      canvas.width, canvas.height,
-      zoomRef.current, offsetRef.current,
-      (z, o) => {
-        zoomRef.current   = z;
-        offsetRef.current = o;
-        setZoom(z);
-        setOffset(o);
-      },
-      () => {
-        // Csak 5 sec múlva töröljük a focus-t — nincs loop, nincs interferencia
-        const t = setTimeout(() => {
-          focusAreaRef.current = null;
-          pulseStartRef.current = 0;
-          draw();
-        }, 5000);
-        pulseRef.current = t;
-      }
-    );
-  }, 300);
+      animateZoomTo(
+        centerWX, centerWY, targetZoom,
+        canvas.width, canvas.height,
+        zoomRef.current, offsetRef.current,
+        (z, o) => {
+          zoomRef.current   = z;
+          offsetRef.current = o;
+          setZoom(z);
+          setOffset(o);
+        },
+        () => {
+          // RAF loop csak amíg van focus — nem akadályozza a drag/zoom-ot
+          const animate = () => {
+            draw();
+            if (focusAreaRef.current) {
+              rafRef.current = requestAnimationFrame(animate);
+            }
+          };
+          rafRef.current = requestAnimationFrame(animate);
 
-  // ← Ez a cleanup, a useEffect végén, nem az animateZoomTo-n belül
-  return () => {
-    clearTimeout(timer);
-    cancelAnimationFrame(rafRef.current);
-    focusAreaRef.current = null;
-    pulseStartRef.current = 0;
-  };
-}, [focusAreaId, areas, draw]);
+          setTimeout(() => {
+            cancelAnimationFrame(rafRef.current);
+            focusAreaRef.current = null;
+            pulseStartRef.current = 0;
+            draw();
+          }, 5000);
+        }
+      );
+    }, 300);
+
+    return () => {
+      clearTimeout(timer);
+      cancelAnimationFrame(rafRef.current);
+      focusAreaRef.current = null;
+      pulseStartRef.current = 0;
+    };
+  }, [focusAreaId, areas, draw]);
   // ── 7. Resize ────────────────────────────────────────────────────────────
 useEffect(() => {
   const canvas = canvasRef.current;
@@ -547,36 +554,6 @@ const newH = Math.round(newW / WORLD_RATIO);
       ))}
     </div>
   </div>
-{/* Focus pulse overlay — CSS animáció, nem JS loop */}
-{focusAreaRef.current && (() => {
-  const area = focusAreaRef.current!;
-  const canvas = canvasRef.current;
-  if (!canvas) return null;
-  const W = canvas.width;
-  const H = canvas.height;
-  const cssW = canvas.offsetWidth;
-  const cssH = canvas.offsetHeight;
-  const contentScaleX = (W / WORLD_W) * zoom;
-  const contentScaleY = (H / WORLD_H) * zoom;
-  const scaleX = cssW / W;
-  const scaleY = cssH / H;
-  const left   = (area.x * contentScaleX + offset.x) * scaleX;
-  const top    = (area.y * contentScaleY + offset.y) * scaleY;
-  const width  = area.width  * contentScaleX * scaleX;
-  const height = area.height * contentScaleY * scaleY;
-  return (
-    <div style={{
-      position: "absolute",
-      left, top, width, height,
-      border: "3px solid #14f195",
-      borderRadius: 2,
-      pointerEvents: "none",
-      zIndex: 5,
-      boxShadow: "0 0 12px rgba(20,241,149,0.6), inset 0 0 8px rgba(20,241,149,0.1)",
-      animation: "focusPulse 1.2s ease-in-out infinite",
-    }} />
-  );
-})()}
         {/* Tooltip */}
         {tooltip && (
           <div style={{ position: "fixed", left: tooltip.x + 14, top: tooltip.y - 10, background: "rgba(6,10,6,0.97)", border: "1px solid rgba(20,241,149,0.25)", borderRadius: 6, padding: "0.5rem 0.75rem", pointerEvents: "none", zIndex: 200, minWidth: 160, boxShadow: "0 4px 24px rgba(0,0,0,0.5)" }}>
