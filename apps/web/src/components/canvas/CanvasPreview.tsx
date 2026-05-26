@@ -20,7 +20,7 @@ export function CanvasPreview() {
       
       <div className="capsule-glow-wrapper w-full">
       <div className="capsule-solana w-full">
-          <div className="capsule-solana-inner">
+          <div className="capsule-solana-inner w-full">
             <PumpCapsule />
           </div>
         </div>

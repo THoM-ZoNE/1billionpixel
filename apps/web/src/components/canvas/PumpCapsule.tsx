@@ -122,21 +122,23 @@ useEffect(() => {
     unsubUploaded?.();
   };
 }, [drawMain]);
-  // ─── Resize ──────────────────────────────────────────────────────────────────
+ // ─── Resize ──────────────────────────────────────────────────────────────────
 useEffect(() => {
-  const canvas = canvasRef.current; if (!canvas) return;
-  const resizeAndDraw = () => {
   const canvas = canvasRef.current;
   if (!canvas) return;
-  // A div szülő szélességét vesszük — ez a kapszula tényleges szélessége
-  const container = canvas.parentElement;
-  const w = Math.floor(container?.getBoundingClientRect().width ?? 800);
-  if (w === 0) { setTimeout(resizeAndDraw, 50); return; }
-  canvas.width  = w;
-  canvas.height = Math.round(w / WORLD_RATIO);
-  drawMain(canvas);
-};
-  resizeAndDraw(); 
+
+  const resizeAndDraw = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const container = canvas.closest(".capsule-solana") as HTMLElement | null;
+    const w = Math.floor(container?.getBoundingClientRect().width ?? 800);
+    if (w === 0) { setTimeout(resizeAndDraw, 50); return; }
+    canvas.width  = w;
+    canvas.height = Math.round(w / WORLD_RATIO);
+    drawMain(canvas);
+  };
+
+  resizeAndDraw();
   window.addEventListener("resize", resizeAndDraw);
   return () => window.removeEventListener("resize", resizeAndDraw);
 }, [drawMain]);
