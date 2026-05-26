@@ -128,15 +128,15 @@ useEffect(() => {
   if (!canvas) return;
 
   const resizeAndDraw = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const container = canvas.closest(".capsule-solana") as HTMLElement | null;
-    const w = Math.floor(container?.getBoundingClientRect().width ?? 800);
-    if (w === 0) { setTimeout(resizeAndDraw, 50); return; }
-    canvas.width  = w;
-    canvas.height = Math.round(w / WORLD_RATIO);
-    drawMain(canvas);
-  };
+  const canvas = canvasRef.current;
+  if (!canvas) return;
+  const container = canvas.closest(".capsule-solana") as HTMLElement | null;
+  const w = Math.floor(container?.getBoundingClientRect().width ?? 800);
+  if (w === 0) { setTimeout(resizeAndDraw, 50); return; }
+  canvas.width  = w;
+  canvas.height = Math.round(w / WORLD_RATIO);
+  drawMain(canvas);
+};
 
   resizeAndDraw();
   window.addEventListener("resize", resizeAndDraw);
@@ -162,10 +162,13 @@ useEffect(() => {
   const loupeTop  = mouse ? (mouse.y / (canvasRef.current?.height ?? 1)) * 100 : 50;
 
  return (
-  <div style={{ cursor: "pointer",lineHeight: 0, fontSize: 0, }} title="Click to open Live Canvas">
+  <div
+    style={{ cursor: "pointer", lineHeight: 0, fontSize: 0, width: "100%", height: "100%" }}
+    title="Click to open Live Canvas"
+  >
     <canvas
       ref={canvasRef}
-      style={{ display: "block", width: "100%", height: "auto" }}
+      style={{ display: "block", width: "100%", height: "100%" }}
       onMouseMove={handleMouseMove}
       onMouseLeave={() => setMouse(null)}
       onClick={handleClick}
