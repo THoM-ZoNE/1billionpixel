@@ -15,6 +15,7 @@ const POLL_MS    = 30_000;
 const LOUPE_SIZE = 160;
 const LOUPE_ZOOM = 5;
 
+
 interface PixelArea {
   id: string;
   x: number; y: number;
@@ -86,6 +87,7 @@ export function LiveCanvas() {
   const pulseRef = useRef<any>(null);
   const searchParams    = useSearchParams();
   const focusAreaId     = searchParams.get("area");
+  const hasZoomedRef = useRef(false);
 
   // ── 2. State ───────────────────────────────────────────────────────────
   const [areas,       setAreas]       = useState<PixelArea[]>([]);
@@ -97,11 +99,7 @@ export function LiveCanvas() {
   const [lastUpdate,  setLastUpdate]  = useState("");
   const [gifOverlays, setGifOverlays] = useState<PixelArea[]>([]);
 
-  // ── 3. Ref szinkronizáció ──────────────────────────────────────────────
-  useEffect(() => { zoomRef.current   = zoom;   }, [zoom]);
-  useEffect(() => { offsetRef.current = offset; }, [offset]);
-
-  // ── 4. Draw ────────────────────────────────────────────────────────────
+    // ── 3. Draw ────────────────────────────────────────────────────────────
   const draw = useCallback(() => {
     const canvas = canvasRef.current; if (!canvas) return;
     const ctx = canvas.getContext("2d"); if (!ctx) return;
@@ -110,6 +108,11 @@ export function LiveCanvas() {
     ctx.clearRect(0, 0, W, H);
     const frameScaleX   = W / WORLD_W;
     const frameScaleY   = H / WORLD_H;
+
+    // ← REF-eket olvasunk, nem state-et!
+    const zoom   = zoomRef.current;
+    const offset = offsetRef.current;
+
     const contentScaleX = frameScaleX * zoom;
     const contentScaleY = frameScaleY * zoom;
     const ox = offset.x;
@@ -179,44 +182,36 @@ export function LiveCanvas() {
 
     ctx.restore();
 
-    //ctx.save();
-    //ctx.fillStyle = "rgba(0, 0, 0, 0.47)";
-    //ctx.beginPath();
-    //ctx.rect(0, 0, W, H);
-    //drawCapsulePath(ctx, frameScaleX, frameScaleY, 0, 0);
-    //ctx.fill("evenodd");
-    //ctx.restore();
-
     drawCapsulePath(ctx, frameScaleX, frameScaleY, 0, 0);
     ctx.strokeStyle = "rgba(20,241,149,0.5)";
     ctx.lineWidth = 2;
     ctx.stroke();
-        // ── Focus pulse highlight ────────────────────────────────────────────
-    // draw()-ban a highlight rész:
-const focusArea = focusAreaRef.current;
-if (focusArea) {
-  if (pulseStartRef.current === 0) pulseStartRef.current = Date.now();
-  const elapsed = (Date.now() - pulseStartRef.current) / 1000;
-  const pulse = (Math.sin(elapsed * Math.PI * 1.2) + 1) / 2; // ~0.6Hz, lassú
-  const fsx = focusArea.x * contentScaleX + ox;
-  const fsy = focusArea.y * contentScaleY + oy;
-  const fsw = focusArea.width  * contentScaleX;
-  const fsh = focusArea.height * contentScaleY;
-  ctx.save();
-  ctx.strokeStyle = `rgba(20, 241, 149, ${0.4 + pulse * 0.6})`;
-  ctx.lineWidth   = 3;
-  ctx.shadowColor = "rgba(20, 241, 149, 0.7)";
-  ctx.shadowBlur  = 6 + pulse * 10;
-  ctx.strokeRect(fsx, fsy, fsw, fsh);
-  ctx.restore();
-} else {
-  pulseStartRef.current = 0; // reset ha nincs focus
-}
-  }, [areas, zoom, offset]);
 
-  useEffect(() => { draw(); }, [draw]);
+    // ── Focus pulse highlight ──────────────────────────────────────────
+    const focusArea = focusAreaRef.current;
+    if (focusArea) {
+      if (pulseStartRef.current === 0) pulseStartRef.current = Date.now();
+      const elapsed = (Date.now() - pulseStartRef.current) / 1000;
+      const pulse = (Math.sin(elapsed * Math.PI * 1.2) + 1) / 2;
+      const fsx = focusArea.x * contentScaleX + ox;
+      const fsy = focusArea.y * contentScaleY + oy;
+      const fsw = focusArea.width  * contentScaleX;
+      const fsh = focusArea.height * contentScaleY;
+      ctx.save();
+      ctx.strokeStyle = `rgba(20, 241, 149, ${0.4 + pulse * 0.6})`;
+      ctx.lineWidth   = 3;
+      ctx.shadowColor = "rgba(20, 241, 149, 0.7)";
+      ctx.shadowBlur  = 6 + pulse * 10;
+      ctx.strokeRect(fsx, fsy, fsw, fsh);
+      ctx.restore();
+    } else {
+      pulseStartRef.current = 0;
+    }
+  }, [areas]); // ← csak areas! zoom és offset ref-ből jön
 
-
+  // ── 4. Ref szinkronizáció + draw trigger ──────────────────────────────
+  useEffect(() => { zoomRef.current = zoom; draw(); }, [zoom, draw]);
+  useEffect(() => { offsetRef.current = offset; draw(); }, [offset, draw]);
   // ── 5. Loupe ───────────────────────────────────────────────────────────
   useEffect(() => {
     const loupe  = loupeRef.current;
@@ -270,8 +265,10 @@ if (focusArea) {
     // ── Focus area URL paraméterből ────────────────────────────────────────
   useEffect(() => {
     if (!focusAreaId || areas.length === 0) return;
+    if (hasZoomedRef.current) return;
     const area = areas.find(a => a.id === focusAreaId);
     if (!area) return;
+    hasZoomedRef.current = true;
     focusAreaRef.current = area;
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -424,7 +421,7 @@ const newH = Math.round(newW / WORLD_RATIO);
     if (e.touches.length !== 1) return;
     const touch = e.touches[0];
     isDragging.current = true;
-    dragStart.current = { mx: touch.clientX, my: touch.clientY, ox: offset.x, oy: offset.y };
+    dragStart.current = { mx: touch.clientX, my: touch.clientY, ox: offsetRef.current.x, oy: offsetRef.current.y };
   };
 
   const onTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
@@ -436,46 +433,34 @@ const newH = Math.round(newW / WORLD_RATIO);
       x: dragStart.current.ox + (touch.clientX - dragStart.current.mx) * (canvas.width / rect.width),
       y: dragStart.current.oy + (touch.clientY - dragStart.current.my) * (canvas.height / rect.height),
     };
-    setOffset(clampOffset(raw.x, raw.y, zoom, canvas.width, canvas.height));
+    setOffset(clampOffset(raw.x, raw.y, zoomRef.current, canvas.width, canvas.height));
     setTooltip(null);
   };
 
   const onTouchEnd = () => { isDragging.current = false; };
 
   // ── 11. GIF overlay pozíció ────────────────────────────────────────────
-  const getGifStyle = useCallback((area: PixelArea): React.CSSProperties => {
+    const getGifStyle = useCallback((area: PixelArea): React.CSSProperties => {
   const canvas = canvasRef.current;
   if (!canvas) return { display: "none" };
-
-  const W = canvas.width;   // belső pixel szélesség
-  const H = canvas.height;  // belső pixel magasság
-
-  // CSS megjelenített méret (maxWidth/maxHeight miatt kisebb lehet)
+  const W = canvas.width;
+  const H = canvas.height;
   const cssW = canvas.offsetWidth;
   const cssH = canvas.offsetHeight;
-
   const scaleX = cssW / W;
   const scaleY = cssH / H;
-
-  const contentScaleX = (W / WORLD_W) * zoom;
+  const contentScaleX = (W / WORLD_W) * zoom;   // ← state, nem ref
   const contentScaleY = (H / WORLD_H) * zoom;
-
   const left   = (area.x * contentScaleX + offset.x) * scaleX;
   const top    = (area.y * contentScaleY + offset.y) * scaleY;
-  const width  = (area.width  * contentScaleX) * scaleX;
-  const height = (area.height * contentScaleY) * scaleY;
-
+  const width  = area.width  * contentScaleX * scaleX;
+  const height = area.height * contentScaleY * scaleY;
   return {
-    position:       "absolute",
-    left,
-    top,
-    width,
-    height,
-    pointerEvents:  "none",
+    position: "absolute", left, top, width, height,
+    pointerEvents: "none",
     imageRendering: "pixelated" as const,
-    objectFit:      "fill" as const,
-    // Kapszulán kívülre kerülő részek elrejtése
-    overflow:       "hidden",
+    objectFit: "fill" as const,
+    overflow: "hidden",
   };
 }, [zoom, offset]);
 
