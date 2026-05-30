@@ -360,7 +360,7 @@ const newH = Math.round(newW / WORLD_RATIO);
     const oldZ  = zoomRef.current;
     const newZ  = Math.min(20, Math.max(0.95, oldZ * delta));
 
-    // Egér köré zoom: az egér alatti pont fix marad
+    // Zoom around cursor: the point under the cursor remains fixed
     const rawX = mouseX - (mouseX - offsetRef.current.x) * (newZ / oldZ);
     const rawY = mouseY - (mouseY - offsetRef.current.y) * (newZ / oldZ);
 
@@ -370,7 +370,7 @@ const newH = Math.round(newW / WORLD_RATIO);
     zoomRef.current   = newZ;
     offsetRef.current = clamped;
 
-    // React state szinkronizálás (UI frissítéshez, pl. zoom % kijelző)
+    // React state synchronization (for UI updates, e.g., zoom % display)
     setZoom(newZ);
     setOffset(clamped);
   };
@@ -401,10 +401,10 @@ const newH = Math.round(newW / WORLD_RATIO);
       y: dragStart.current.oy + (e.clientY - dragStart.current.my) * (canvas.height / rect.height),
     };
     const clamped = clampOffset(raw.x, raw.y, zoomRef.current, canvas.width, canvas.height);
-    offsetRef.current = clamped;        // ← ref azonnali frissítés
+    offsetRef.current = clamped;        // ← immediate ref update
     setOffset(clamped);
     setTooltip(null);
-    hoveredAreaRef.current = null;      // ← drag közben ne legyen hover
+    hoveredAreaRef.current = null;      // ← don't show hover while dragging
   } else {
     const wx = (cx - offsetRef.current.x) / ((canvas.width  / WORLD_W) * zoomRef.current);
     const wy = (cy - offsetRef.current.y) / ((canvas.height / WORLD_H) * zoomRef.current);
@@ -413,14 +413,14 @@ const newH = Math.round(newW / WORLD_RATIO);
       wy >= a.y && wy <= a.y + a.height
     ) ?? null;
 
-    // Hover keret: csak ha változott, újrarajzolás
+    // Hover frame: redraw only if changed
     if (hoveredAreaRef.current?.id !== hit?.id) {
       hoveredAreaRef.current = hit;
       setHoveredArea(hit ?? null);
       drawRef.current();
     }
 
-    // Cursor frissítés
+    // Cursor update
     canvas.style.cursor = hit ? "pointer" : "crosshair";
 
     setTooltip(hit ? { area: hit, x: e.clientX, y: e.clientY } : null);
@@ -474,7 +474,7 @@ const newH = Math.round(newW / WORLD_RATIO);
 
   const onTouchEnd = () => { isDragging.current = false; };
 
-  // ── 11. GIF overlay pozíció ────────────────────────────────────────────
+  // ── 11. GIF overlay position ────────────────────────────────────────────
     const getGifStyle = useCallback((area: PixelArea): React.CSSProperties => {
   const canvas = canvasRef.current;
   if (!canvas) return { display: "none" };
@@ -484,7 +484,7 @@ const newH = Math.round(newW / WORLD_RATIO);
   const cssH = canvas.offsetHeight;
   const scaleX = cssW / W;
   const scaleY = cssH / H;
-  const contentScaleX = (W / WORLD_W) * zoom;   // ← state, nem ref
+  const contentScaleX = (W / WORLD_W) * zoom;   // ← state, not ref
   const contentScaleY = (H / WORLD_H) * zoom;
   const left   = (area.x * contentScaleX + offset.x) * scaleX;
   const top    = (area.y * contentScaleY + offset.y) * scaleY;
@@ -520,7 +520,7 @@ const getHoverStyle = useCallback((area: PixelArea): React.CSSProperties => {
     pointerEvents:   "none",
     backgroundColor: "rgba(20, 241, 149, 0.4)",
     mixBlendMode:    "screen" as const,
-    zIndex:          10,  // GIF-ek fölé
+    zIndex:          10,  // Above GIFs
   };
 }, [zoom, offset]);
 
@@ -529,7 +529,7 @@ const zoomAroundCenter = useCallback((newZ: number) => {
   const canvas = canvasRef.current;
   if (!canvas) return;
   const oldZ = zoomRef.current;
-  const cx = canvas.width  / 2;  // canvas közepe
+  const cx = canvas.width  / 2;  // canvas center
   const cy = canvas.height / 2;
 
   const rawX = cx - (cx - offsetRef.current.x) * (newZ / oldZ);
@@ -543,18 +543,18 @@ const zoomAroundCenter = useCallback((newZ: number) => {
 }, []);
 
 const startZoom = (direction: 1 | -1) => {
-  // Azonnal egy lépés
+  // One immediate step
   zoomAroundCenter(direction === 1
     ? Math.min(20, zoomRef.current * 1.1)
     : Math.max(0.95, zoomRef.current * 0.9)
   );
-  // Majd folyamatosan
+  // Then continuously
   zoomIntervalRef.current = setInterval(() => {
     zoomAroundCenter(direction === 1
       ? Math.min(20, zoomRef.current * 1.1)
       : Math.max(0.95, zoomRef.current * 0.9)
     );
-  }, 150); // ms — ezt állíthatod
+  }, 150); // ms — you can adjust this
 };
 
 const stopZoom = () => {

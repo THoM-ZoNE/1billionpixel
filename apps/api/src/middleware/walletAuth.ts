@@ -14,15 +14,15 @@ export async function verifyWalletSignature(
   if (!walletAddress) {
     return reply.status(401).send({ error: "Missing wallet address" });
   }
-  // ── skipSignature ellenőrzés ──
+  // ── skipSignature check ──
   const wallet = await prisma.wallet.findUnique({ where: { address: walletAddress } });
   if (wallet?.skipSignature) {
-    // Sign ellenőrzés ki van kapcsolva ennél a walletnél — átmegyünk
-    // FONTOS: walletAddress-t be kell írni a req-be, különben a canvas route-ban undefined lesz
+    // Signature check is disabled for this wallet — skipping
+    // IMPORTANT: walletAddress must be written into the req, otherwise it will be undefined in the canvas route
     (req as any).walletAddress = walletAddress;
     return;
   }
-  // Normál sign ellenőrzés
+  // Normal signature check
   if (!signature || !claimMessage) {
     return reply.status(401).send({ error: "Missing signature or message" });
   }

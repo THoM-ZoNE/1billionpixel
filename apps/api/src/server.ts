@@ -17,7 +17,7 @@ import adminRoutes from "./routes/admin";
 import path from "path";
 
 async function main() {
-  // BigInt -> string globális szerializáció
+  // BigInt -> string global serialization
   (BigInt.prototype as any).toJSON = function () {
     return this.toString();
   };

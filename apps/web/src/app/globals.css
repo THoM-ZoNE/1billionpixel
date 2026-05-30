@@ -57,7 +57,7 @@ body { background: #0a0a0a;
 
 .capsule-solana {
   position: relative;
-  z-index: 1;             /* glow fölé kerül */
+  z-index: 1;             /* placed above the glow */
   border-radius: 999px;
   padding: 3px;
   background: linear-gradient(50deg, #9945FF 0%, #14F195 100%);
@@ -70,7 +70,7 @@ body { background: #0a0a0a;
   border-radius: 996px;
   background: #0a0a0a;
   overflow: hidden;
-  width: calc(100% - 6px);   /* 3px padding mindkét oldalon */
+  width: calc(100% - 6px);   /* 3px padding on both sides */
   margin: 3px;               /* 3px offset */
   aspect-ratio: 2.379 / 1;
   position: relative;
@@ -120,7 +120,7 @@ button:focus-visible {
   height: 64px;
   display: flex;
   align-items: center;
-  justify-content: space-between;  /* logo balra, wallet jobbra */
+  justify-content: space-between;  /* logo left, wallet right */
 }
 
 .navbar-logo {
