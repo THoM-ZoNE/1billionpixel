@@ -16,7 +16,7 @@ interface ClaimModalProps {
   onImageSelected?: (dataUrl: string | null) => void;
 }
 
-export function ClaimModal({ region, availableQuota, onClose, onImageSelected }: ClaimModalProps) {
+export function ClaimModal({ region, availableQuota, onClose, onSuccess, onImageSelected }: ClaimModalProps) {
   const wallet = useWallet();
   const [link,         setLink]         = useState("");
   const [imageFile,    setImageFile]    = useState<File | null>(null);
@@ -124,6 +124,7 @@ export function ClaimModal({ region, availableQuota, onClose, onImageSelected }:
       await refreshWalletData(address);
       const data = await res.json();
       setClaimedAreaId(data?.id ?? data?.area?.id ?? null);
+      onSuccess?.();
       setStep("done");
     } catch (err: any) {
       setError(err?.message ?? "An error occurred during claim.");

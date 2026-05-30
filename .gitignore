@@ -28,3 +28,9 @@ Thumbs.db
 
 # Editor
 .vscode/settings.json
+
+# Docker
+docker-compose.override.yml
+.docker/
+postgres-data/
+pgdata/
