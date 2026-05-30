@@ -284,3 +284,12 @@ button:focus-visible {
     font-size: 1.2rem;
   }
 }
+
+/* Navbar responsive helpers */
+.hide-mobile { display: flex; }
+.show-mobile { display: none; }
+
+@media (max-width: 768px) {
+  .hide-mobile { display: none !important; }
+  .show-mobile { display: flex !important; }
+}
