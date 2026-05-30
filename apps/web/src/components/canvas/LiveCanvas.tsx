@@ -5,16 +5,11 @@ import { onCanvasEvent, connectWebSocket } from "@/lib/websocket";
 import { api } from "@/lib/api";
 import {
   WORLD_W, WORLD_H, WORLD_RATIO,
-  CAPSULE_W, CAPSULE_H, CAPSULE_OFFSET_X, CAPSULE_OFFSET_Y,
   drawCapsulePath,
-  canvasToWorld,
 } from "@/lib/capsuleConfig";
 import { useSearchParams } from "next/navigation";
 
 const POLL_MS    = 30_000;
-const LOUPE_SIZE = 160;
-const LOUPE_ZOOM = 5;
-
 
 interface PixelArea {
   id: string;
@@ -73,7 +68,6 @@ function animateZoomTo(
 export function LiveCanvas() {
   // ── 1. Refs ────────────────────────────────────────────────────────────
   const canvasRef  = useRef<HTMLCanvasElement>(null);
-  const loupeRef   = useRef<HTMLCanvasElement>(null);
   const imgCache   = useRef<Map<string, HTMLImageElement>>(new Map());
   const isDragging = useRef(false);
   const dragStart  = useRef({ mx: 0, my: 0, ox: 0, oy: 0 });
@@ -86,13 +80,12 @@ export function LiveCanvas() {
   const hoveredAreaRef = useRef<PixelArea | null>(null);
   const dragMovedRef   = useRef(false);
   const [selectedArea, setSelectedArea] = useState<PixelArea | null>(null);
+  const zoomIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // ── Focus area (URL paraméterből) ─────────────────────────────────────
   const focusAreaRef    = useRef<PixelArea | null>(null);
-  const pulseRef = useRef<any>(null);
   const searchParams    = useSearchParams();
   const focusAreaId     = searchParams.get("area");
   const hasZoomedRef = useRef(false);
-  const prevFocusIdRef = useRef<string | null>(null);
   const areasRef = useRef<PixelArea[]>([]);
 
   // ── 2. State ───────────────────────────────────────────────────────────
@@ -104,7 +97,8 @@ export function LiveCanvas() {
   const [tooltip,     setTooltip]     = useState<{ area: PixelArea; x: number; y: number } | null>(null);
   const [lastUpdate,  setLastUpdate]  = useState("");
   const [gifOverlays, setGifOverlays] = useState<PixelArea[]>([]);
-
+  const [hoveredArea, setHoveredArea] = useState<PixelArea | null>(null);
+  const [copied, setCopied] = useState(false);
     // ── 3. Draw ────────────────────────────────────────────────────────────
   const draw = useCallback(() => {
     const canvas = canvasRef.current; if (!canvas) return;
@@ -115,7 +109,6 @@ export function LiveCanvas() {
     const frameScaleX   = W / WORLD_W;
     const frameScaleY   = H / WORLD_H;
 
-    // ← REF-eket olvasunk, nem state-et!
     const zoom   = zoomRef.current;
     const offset = offsetRef.current;
 
@@ -185,14 +178,6 @@ export function LiveCanvas() {
         ctx.fillRect(sx, sy, sw, sh);
       }
     });
-
-    ctx.restore();
-
-    drawCapsulePath(ctx, frameScaleX, frameScaleY, 0, 0);
-    ctx.strokeStyle = "rgba(20,241,149,0.5)";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
     // ── Focus pulse highlight ──────────────────────────────────────────
     const focusArea = focusAreaRef.current;
     if (focusArea) {
@@ -213,63 +198,22 @@ export function LiveCanvas() {
     } else {
       pulseStartRef.current = 0;
     }
-// ── Hover highlight ─────────────────────────────────────────────────
-const hoveredArea = hoveredAreaRef.current;
-if (hoveredArea) {
-  const hsx = hoveredArea.x * contentScaleX + ox;
-  const hsy = hoveredArea.y * contentScaleY + oy;
-  const hsw = hoveredArea.width  * contentScaleX;
-  const hsh = hoveredArea.height * contentScaleY;
+    ctx.restore();
+ // Capsule border stroke
+      drawCapsulePath(ctx, frameScaleX, frameScaleY, 0, 0);
+      ctx.strokeStyle = "rgba(20,241,149,1.5)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
 
-  ctx.save();
-
-  // Canvas határaira clip — a keret nem lóg ki
-  ctx.beginPath();
-  ctx.rect(0, 0, canvas.width, canvas.height);
-  ctx.clip();
-
-  const grad = ctx.createLinearGradient(hsx, hsy, hsx + hsw, hsy);
-  grad.addColorStop(0,   "#9945FF");
-  grad.addColorStop(0.5, "#14F195");
-  grad.addColorStop(1,   "#9945FF");
-
-  ctx.strokeStyle = grad;
-  ctx.lineWidth   = 2.5;
-  ctx.shadowColor = "rgba(153, 69, 255, 0.6)";
-  ctx.shadowBlur  = 8;
-  ctx.strokeRect(hsx, hsy, hsw, hsh);
-
-  ctx.restore();
-}
+    
   }, [areas]); // ← csak areas! zoom és offset ref-ből jön
   // draw ref szinkronizáció — mindig a legfrissebb draw-t tartalmazza
   useEffect(() => { drawRef.current = draw; }, [draw]);
   // ── 4. Ref szinkronizáció + draw trigger ──────────────────────────────
   useEffect(() => { zoomRef.current = zoom; drawRef.current(); }, [zoom, draw]);
   useEffect(() => { offsetRef.current = offset; drawRef.current(); }, [offset, draw]);
-  
-  // ── 5. Loupe ───────────────────────────────────────────────────────────
-  useEffect(() => {
-    const loupe  = loupeRef.current;
-    const canvas = canvasRef.current;
-    if (!loupe || !canvas || !mouse) return;
-    const ctx  = loupe.getContext("2d"); if (!ctx) return;
-    const half = LOUPE_SIZE / 2;
-    ctx.clearRect(0, 0, LOUPE_SIZE, LOUPE_SIZE);
-    ctx.save();
-    ctx.beginPath(); ctx.arc(half, half, half, 0, Math.PI * 2); ctx.clip();
-    ctx.drawImage(canvas, mouse.cx - half / LOUPE_ZOOM, mouse.cy - half / LOUPE_ZOOM, LOUPE_SIZE / LOUPE_ZOOM, LOUPE_SIZE / LOUPE_ZOOM, 0, 0, LOUPE_SIZE, LOUPE_SIZE);
-    ctx.restore();
-    ctx.beginPath(); ctx.arc(half, half, half - 1, 0, Math.PI * 2);
-    ctx.strokeStyle = "rgba(153,69,255,0.9)"; ctx.lineWidth = 2; ctx.stroke();
-    ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(half, half - 12); ctx.lineTo(half, half + 12);
-    ctx.moveTo(half - 12, half); ctx.lineTo(half + 12, half);
-    ctx.stroke();
-  }, [mouse]);
 
-  // ── 6. Data polling ────────────────────────────────────────────────────
+  // ── 5. Data polling ────────────────────────────────────────────────────
   const loadData = useCallback(async () => {
     try {
       const [ar, st] = await Promise.all([
@@ -291,7 +235,7 @@ if (hoveredArea) {
     return () => clearInterval(iv);
   }, [loadData]);
 
-  // ── 6b. WebSocket ──────────────────────────────────────────────────────
+  // ── 6. WebSocket ──────────────────────────────────────────────────────
   useEffect(() => {
     connectWebSocket();
     const unsubClaimed  = onCanvasEvent("AREA_CLAIMED",  () => loadData());
@@ -299,7 +243,7 @@ if (hoveredArea) {
     const unsubUpdate   = onCanvasEvent("CANVAS_UPDATE",  () => loadData());
     return () => { unsubClaimed(); unsubUploaded(); unsubUpdate(); };
   }, [loadData]);
-   // ── Focus area URL paraméterből ────────────────────────────────────────
+   // ── Focus area from URL parameters ────────────────────────────────────────
 useEffect(() => {
   if (!focusAreaId) return;
 
@@ -336,7 +280,7 @@ useEffect(() => {
         setZoom(z);
         setOffset(o);
       },
-      () => { { /* RAF loop drawRef.current()-tel */ }
+      () => { {}
         const animate = () => {
           drawRef.current();
           if (focusAreaRef.current) {
@@ -414,7 +358,7 @@ const newH = Math.round(newW / WORLD_RATIO);
 
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
     const oldZ  = zoomRef.current;
-    const newZ  = Math.min(10, Math.max(0.95, oldZ * delta));
+    const newZ  = Math.min(20, Math.max(0.95, oldZ * delta));
 
     // Egér köré zoom: az egér alatti pont fix marad
     const rawX = mouseX - (mouseX - offsetRef.current.x) * (newZ / oldZ);
@@ -472,6 +416,7 @@ const newH = Math.round(newW / WORLD_RATIO);
     // Hover keret: csak ha változott, újrarajzolás
     if (hoveredAreaRef.current?.id !== hit?.id) {
       hoveredAreaRef.current = hit;
+      setHoveredArea(hit ?? null);
       drawRef.current();
     }
 
@@ -552,7 +497,72 @@ const newH = Math.round(newW / WORLD_RATIO);
     objectFit: "fill" as const,
     overflow: "hidden",
   };
+},[zoom, offset]);
+
+const getHoverStyle = useCallback((area: PixelArea): React.CSSProperties => {
+  const canvas = canvasRef.current;
+  if (!canvas) return { display: "none" };
+  const W = canvas.width;
+  const H = canvas.height;
+  const cssW = canvas.offsetWidth;
+  const cssH = canvas.offsetHeight;
+  const scaleX = cssW / W;
+  const scaleY = cssH / H;
+  const contentScaleX = (W / WORLD_W) * zoom;
+  const contentScaleY = (H / WORLD_H) * zoom;
+  const left   = (area.x * contentScaleX + offset.x) * scaleX;
+  const top    = (area.y * contentScaleY + offset.y) * scaleY;
+  const width  = area.width  * contentScaleX * scaleX;
+  const height = area.height * contentScaleY * scaleY;
+  return {
+    position:        "absolute",
+    left, top, width, height,
+    pointerEvents:   "none",
+    backgroundColor: "rgba(20, 241, 149, 0.4)",
+    mixBlendMode:    "screen" as const,
+    zIndex:          10,  // GIF-ek fölé
+  };
 }, [zoom, offset]);
+
+// ── Zoom helper ──────────────────────────────────────────────────────
+const zoomAroundCenter = useCallback((newZ: number) => {
+  const canvas = canvasRef.current;
+  if (!canvas) return;
+  const oldZ = zoomRef.current;
+  const cx = canvas.width  / 2;  // canvas közepe
+  const cy = canvas.height / 2;
+
+  const rawX = cx - (cx - offsetRef.current.x) * (newZ / oldZ);
+  const rawY = cy - (cy - offsetRef.current.y) * (newZ / oldZ);
+  const clamped = clampOffset(rawX, rawY, newZ, canvas.width, canvas.height);
+
+  zoomRef.current   = newZ;
+  offsetRef.current = clamped;
+  setZoom(newZ);
+  setOffset(clamped);
+}, []);
+
+const startZoom = (direction: 1 | -1) => {
+  // Azonnal egy lépés
+  zoomAroundCenter(direction === 1
+    ? Math.min(20, zoomRef.current * 1.1)
+    : Math.max(0.95, zoomRef.current * 0.9)
+  );
+  // Majd folyamatosan
+  zoomIntervalRef.current = setInterval(() => {
+    zoomAroundCenter(direction === 1
+      ? Math.min(20, zoomRef.current * 1.1)
+      : Math.max(0.95, zoomRef.current * 0.9)
+    );
+  }, 150); // ms — ezt állíthatod
+};
+
+const stopZoom = () => {
+  if (zoomIntervalRef.current) {
+    clearInterval(zoomIntervalRef.current);
+    zoomIntervalRef.current = null;
+  }
+};
 
   const zp = Math.round(zoom * 100);
   return (
@@ -590,6 +600,7 @@ const newH = Math.round(newW / WORLD_RATIO);
       position: "relative",
       lineHeight: 0,
       display: "inline-block",
+      overflow:"hidden",
     }}
   >
     <canvas
@@ -617,17 +628,23 @@ const newH = Math.round(newW / WORLD_RATIO);
 
     {/* GIF overlay — változatlan */}
     <div style={{
-      position: "absolute",
-      top: 0, left: 0,
-      width: "100%", height: "100%",
-      pointerEvents: "none",
-      zIndex: 2,
-      clipPath: "inset(calc(8.33% + 2px) calc(8.33% + 2px) calc(8.33% + 2px) calc(8.33% + 2px) round 17.51% / 41.67%)",
-    }}>
-      {gifOverlays.map((area) => (
-        <img key={area.id} src={area.imageUrl!} alt="" style={getGifStyle(area)} />
-      ))}
-    </div>
+  position: "absolute",
+  top: 0, left: 0,
+  width: "100%", height: "100%",
+  pointerEvents: "none",
+  zIndex: 2,
+  clipPath: "inset(calc(8.33% + 2px) calc(8.33% + 2px) calc(8.33% + 2px) calc(8.33% + 2px) round 17.51% / 41.67%)",
+}}>
+  {gifOverlays.map((area) => (
+    <img key={area.id} src={area.imageUrl!} alt="" style={getGifStyle(area)} />
+  ))}
+
+  {/* Hover highlight — GIF-ek felett */}
+  {hoveredArea && (
+    <div style={getHoverStyle(hoveredArea)} />
+  )}
+
+</div>
   </div>
         {selectedArea && (
   <div
@@ -701,32 +718,83 @@ const newH = Math.round(newW / WORLD_RATIO);
         </a>
       )}
 
-      {/* Zoom to area */}
-      <a
-        href={`/canvas/live?area=${selectedArea.id}`}
-        style={{
-          marginTop: "0.25rem",
-          padding: "0.5rem",
-          background: "rgba(153,69,255,0.1)",
-          border: "1px solid rgba(153,69,255,0.25)",
-          borderRadius: 6,
-          fontFamily: "monospace", fontSize: "0.7rem",
-          color: "rgba(153,69,255,0.9)",
-          textAlign: "center", textDecoration: "none",
-          cursor: "pointer",
-        }}
-      >
-        🔍 Zoom to area
-      </a>
+      {/* Zoom to area + Link másoló */}
+      <style>{`
+  .area-action-btn {
+    transition: background 180ms ease, border-color 180ms ease, color 180ms ease;
+  }
+  .area-action-btn:hover {
+    background: rgba(153, 69, 255, 0.25) !important;
+    border-color: rgba(153, 69, 255, 0.6) !important;
+    color: rgba(200, 150, 255, 1) !important;
+  }
+`}</style>
+<div style={{ display: "flex", gap: "0.5rem", marginTop: "0.25rem" }}>
+  <a
+    href={`/canvas/live?area=${selectedArea.id}`}
+    className="area-action-btn"
+    style={{
+      flex: 1,
+      padding: "0.5rem",
+      background: "rgba(153,69,255,0.1)",
+      border: "1px solid rgba(153,69,255,0.25)",
+      borderRadius: 6,
+      fontFamily: "monospace", fontSize: "0.7rem",
+      color: "rgba(153,69,255,0.9)",
+      textAlign: "center", textDecoration: "none",
+      cursor: "pointer",
+    }}
+  >
+    🔍 Zoom to area
+  </a>
+
+  <button
+  className="area-action-btn"
+    onClick={() => {
+      const url = `${window.location.origin}/canvas/live?area=${selectedArea.id}`;
+      navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    }}
+    title="Copy area link"
+    style={{
+      padding: "0.5rem 0.75rem",
+      background: "rgba(153,69,255,0.1)",
+      border: "1px solid rgba(153,69,255,0.25)",
+      borderRadius: 6,
+      color: "rgba(153,69,255,0.9)",
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      flexShrink: 0,
+    }}
+  >
+    {copied
+  ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#14F195" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+  : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+}
+  </button>
+</div>
     </div>
   </div>
 )}
 
         {/* Zoom controls */}
         <div style={{ position: "absolute", bottom: 16, left: "50%", transform: "translateX(-50%)", display: "flex", gap: "0.5rem", alignItems: "center", background: "rgba(6,10,6,0.85)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 8, padding: "0.4rem 0.9rem" }}>
-          <button onClick={() => { const nz = Math.max(0.95, zoom - 0.1); const canvas = canvasRef.current; if (!canvas) { setZoom(nz); return; } setZoom(nz); setOffset(o => clampOffset(o.x, o.y, nz, canvas.width, canvas.height)); }} style={{ background: "none", border: "none", color: "#14f195", fontSize: "1.1rem", cursor: "pointer", padding: "0 4px" }}>{"−"}</button>
+          <button
+  onMouseDown={() => startZoom(-1)}
+  onMouseUp={stopZoom}
+  onMouseLeave={stopZoom}   // ← ha elhúzza az egeret, leáll
+  onTouchStart={() => startZoom(-1)}
+  onTouchEnd={stopZoom} style={{ background: "none", border: "none", color: "#14f195", fontSize: "1.1rem", cursor: "pointer", padding: "0 4px" }}>{"−"}</button>
           <span style={{ fontFamily: "monospace", fontSize: "0.7rem", color: "rgba(255,255,255,0.5)", minWidth: 36, textAlign: "center" }}>{zp}%</span>
-          <button onClick={() => { const nz = Math.min(20, zoom + 0.1); const canvas = canvasRef.current; if (!canvas) { setZoom(nz); return; } setZoom(nz); setOffset(o => clampOffset(o.x, o.y, nz, canvas.width, canvas.height)); }} style={{ background: "none", border: "none", color: "#14f195", fontSize: "1.1rem", cursor: "pointer", padding: "0 4px" }}>{"+"}</button>
+          <button
+  onMouseDown={() => startZoom(1)}
+  onMouseUp={stopZoom}
+  onMouseLeave={stopZoom}
+  onTouchStart={() => startZoom(1)}
+  onTouchEnd={stopZoom} style={{ background: "none", border: "none", color: "#14f195", fontSize: "1.1rem", cursor: "pointer", padding: "0 4px" }}>{"+"}</button>
           <span style={{ width: 1, height: 16, background: "rgba(255,255,255,0.1)", margin: "0 4px" }}></span>
           <button onClick={() => { setZoom(1); setOffset({ x: 0, y: 0 }); }} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.35)", fontSize: "0.65rem", fontFamily: "monospace", cursor: "pointer", letterSpacing: "0.05em" }}>RESET</button>
         </div>
