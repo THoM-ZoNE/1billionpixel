@@ -18,7 +18,7 @@ export function CanvasPreview() {
         </h2>
         <p style={{
           color: "rgba(255,255,255,0.35)", fontSize: "0.82rem",
-          maxWidth: 480, margin: "0 auto", lineHeight: 1.7,
+          maxWidth: 720, margin: "0 auto", lineHeight: 1.7,
           fontFamily: "monospace",
         }}>
           Every claimed area appears here in real time as the capsule fills up.
