@@ -9,7 +9,7 @@ export async function checkAreaAvailable(
 ): Promise<boolean> {
   const overlap = await prisma.pixelArea.findFirst({
     where: {
-      status: { in: ["ACTIVE", "AT_RISK", "FORBIDDEN"] }, // ← FORBIDDEN hozzáadva
+      status: { in: ["ACTIVE", "AT_RISK", "FORBIDDEN"] }, // ← FORBIDDEN added
       x: { lt: x + width },
       y: { lt: y + height },
       AND: [
@@ -94,20 +94,20 @@ export interface ClaimAreaInput {
   imageUrl?: string;
   imageKey?: string;
   imageType?: string;
-  link?: string; // ha később kell
+  link?: string; // if needed later
 }
 
 export async function claimArea(input: ClaimAreaInput) {
   const pixelCount = BigInt(input.width * input.height);
 
-  // 1. Ellenőrzés: átfedés más területekkel
+  // 1. Check for overlap with existing areas
   const overlapping = await prisma.pixelArea.findFirst({
     where: {
       status: "ACTIVE",
       x: { lte: input.x + input.width - 1 },
       y: { lte: input.y + input.height - 1 },
       AND: [
-        { x: { gte: input.x - 0 } }, // finomítható
+        { x: { gte: input.x - 0 } }, // can be refined
         { y: { gte: input.y - 0 } },
       ],
     },
@@ -127,7 +127,7 @@ export async function claimArea(input: ClaimAreaInput) {
     throw new Error("OVERLAP: This area overlaps with an existing claim");
   }
 
-  // 2. Wallet kvóta ellenőrzés
+  // 2. Wallet quota check
   const wallet = await prisma.wallet.findUnique({
     where: { address: input.walletAddress },
   });
@@ -136,7 +136,7 @@ export async function claimArea(input: ClaimAreaInput) {
     throw new Error("WALLET_NOT_FOUND: Wallet not registered");
   }
 
-  // On-the-fly számítás: totalQuota - lockedPixels — így a manualOverride is működik
+  // On-the-fly calculation: totalQuota - lockedPixels — this keeps manualOverride working
   const effectiveAvailable = wallet.totalQuota - wallet.lockedPixels;
   if (effectiveAvailable < pixelCount) {
     throw new Error(
@@ -144,7 +144,7 @@ export async function claimArea(input: ClaimAreaInput) {
     );
   }
 
-  // 3. Tranzakció: area létrehozás + kvóta csökkentés
+  // 3. Transaction: create area and decrement quota
   const area = await prisma.$transaction(async (tx) => {
     const newArea = await tx.pixelArea.create({
       data: {

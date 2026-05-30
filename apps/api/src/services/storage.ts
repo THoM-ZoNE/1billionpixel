@@ -2,7 +2,7 @@ import fs from "fs/promises";
 import path from "path";
 import { randomUUID } from "crypto";
 
-// Egyelőre local, később DO Spaces / R2 cserére kész
+// Currently local storage; prepared for later DO Spaces / R2 replacement
 const UPLOAD_DIR = process.env.UPLOAD_DIR ?? path.join(process.cwd(), "uploads");
 
 export async function saveImageLocally(
@@ -23,5 +23,5 @@ export async function saveImageLocally(
   return { url, key, type: ext };
 }
 
-// DigitalOcean Spaces stub — majd kicseréled
+// DigitalOcean Spaces stub — replace later if needed
 // export async function saveImageToSpaces(...) { ... }

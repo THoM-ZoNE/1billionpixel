@@ -9,10 +9,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   useEffect(() => { setMounted(true); }, []);
 
-  // SSR-ben és első render előtt a WalletProvider-t NEM rendelünk —
-  // de a children-t visszaadjuk, hogy az oldal tartalma látható legyen.
-  // A wallet-függő komponensek (Navbar, HeroSection) dynamic import + ssr:false-szal
-  // töltődnek be, így ők sosem futnak le provider nélkül.
+  // Do not attach WalletProvider during SSR or before the first render —
+  // but return the children so the page content remains visible.
+  // Wallet-dependent components (Navbar, HeroSection) are loaded with dynamic import + ssr:false,
+  // so they never run without the provider.
   if (!mounted) return <>{children}</>;
 
   return (

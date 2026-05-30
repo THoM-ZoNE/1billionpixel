@@ -38,7 +38,7 @@ export function PumpCapsule() {
     ctx.fillRect(0, 0, W, H);
     ctx.restore();
 
-    // Lekérés a teljes world méretben
+    // Fetch the full world area set
     api.get<any>(`/canvas/areas?x=0&y=0&w=${WORLD_W}&h=${WORLD_H}`)
       .then((resp) => {
         const areas = Array.isArray(resp) ? resp : (resp?.areas ?? []);
@@ -67,7 +67,7 @@ export function PumpCapsule() {
                 ctx.save();
                 drawCapsulePath(ctx, scaleX, scaleY, ox, oy);
                 ctx.clip();
-                // Képet torzítás nélkül rajzoljuk (scaleX === scaleY egyforma skála)
+                // Draw the image without distortion (scaleX === scaleY uniform scale)
                 ctx.drawImage(img, dx, dy, dw, dh);
                 ctx.restore();
                 resolve();
@@ -95,7 +95,7 @@ export function PumpCapsule() {
         });
 
         Promise.all(draws).then(() => {
-          // Kapszula stroke
+          // Capsule stroke
           drawCapsulePath(ctx, scaleX, scaleY, ox, oy);
           ctx.strokeStyle = "rgba(20,241,149,0.5)";
           ctx.lineWidth   = 2;
@@ -105,7 +105,7 @@ export function PumpCapsule() {
       .catch(console.error);
   }, []);
   // ─── Polling + WebSocket refresh ─────────────────────────────────────
-const POLL_MS = 15_000; // 15 másodperc
+const POLL_MS = 15_000; // 15 seconds
 
 useEffect(() => {
   const canvas = canvasRef.current;
@@ -116,7 +116,7 @@ useEffect(() => {
     drawMain(canvas);
   }, POLL_MS);
 
-  // WebSocket — azonnali frissítés claim után
+  // WebSocket — immediate refresh after claim
   const { connectWebSocket, onCanvasEvent } = require("@/lib/websocket");
   connectWebSocket();
   const unsubClaimed  = onCanvasEvent("AREA_CLAIMED",  () => drawMain(canvas));
@@ -171,7 +171,7 @@ useEffect(() => {
     });
   };
 
-  // Kattintásra → Live Canvas megnyitása
+  // On click → open Live Canvas
   const handleClick = () => {
     router.push("/canvas/live");
   };

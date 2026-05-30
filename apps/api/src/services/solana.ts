@@ -22,7 +22,7 @@ export const getOnChainBalance = async (walletAddress: string): Promise<bigint> 
     const pubkey = new PublicKey(walletAddress);
     const mint   = getTokenMint();
 
-    // Próbálja mindkét token programmal
+    // Try both token programs
     for (const programId of [TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID]) {
       try {
         const ata  = await getAssociatedTokenAddress(mint, pubkey, false, programId);
@@ -31,7 +31,7 @@ export const getOnChainBalance = async (walletAddress: string): Promise<bigint> 
         const decimals = BigInt(mintInfo.decimals); // 6
         return acct.amount / (10n ** decimals);
       } catch {
-        // következő program
+        // next program
       }
     }
     return 0n;
@@ -53,8 +53,8 @@ export const syncWalletBalance = async (address: string) => {
   const lockedPixels   = existing?.lockedPixels ?? 0n;
   const availableQuota = onChain >= lockedPixels ? onChain - lockedPixels : 0n;
 
-  // Ha manualOverride be van kapcsolva, csak a lastSynced-et frissítjük —
-  // a totalQuota és availableQuota manuálisan lett beállítva, nem írjuk felül.
+  // If manualOverride is enabled, only update lastSynced —
+  // totalQuota and availableQuota were set manually, do not override them.
   const wallet = await prisma.wallet.upsert({
     where:  { address },
     create: {
@@ -68,7 +68,7 @@ export const syncWalletBalance = async (address: string) => {
       : { totalQuota: onChain, availableQuota: availableQuota, lastSynced: new Date() },
   });
 
-  // availableQuota-t mindig on-the-fly számítjuk — a DB-ben tárolt érték elcsúszikásban lehet
+  // availableQuota is always computed on-the-fly — stored DB value may drift
   const effectiveAvailable = wallet.totalQuota >= wallet.lockedPixels
     ? wallet.totalQuota - wallet.lockedPixels
     : 0n;

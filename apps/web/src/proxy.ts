@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 export function proxy(req: NextRequest) {
-  // /admin csak localhost-ról vagy ha van admin cookie
+  // /admin only from localhost or if an admin cookie exists
   if (req.nextUrl.pathname.startsWith("/admin")) {
-    // production-ban IP alapú szűrés vagy más védelem jöhet
+    // in production, IP-based filtering or another protection can be used
   }
   return NextResponse.next();
 }

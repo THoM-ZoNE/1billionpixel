@@ -23,7 +23,7 @@ async function seedForbidden() {
     create: { address: "SYSTEM" },
   });
 
-  // Régi forbidden zónák törlése — ne duplikálódjanak újrafuttatáskor
+  // Delete old forbidden zones — avoid duplicates on rerun
   const deleted = await prisma.pixelArea.deleteMany({
     where: { status: "FORBIDDEN" },
   });
@@ -42,10 +42,10 @@ async function seedForbidden() {
       const th = Math.min(COARSE, CANVAS_H - ty);
 
       if (isTileFullyOutside(tx, ty, tw, th)) {
-        // Teljesen kint → egy nagy blokk
+        // Fully outside → one large block
         forbidden.push({ x: tx, y: ty, width: tw, height: th });
       } else if (isTilePartiallyOutside(tx, ty, tw, th)) {
-        // Részben kint → FINE bontás
+        // Partially outside → FINE subdivision
         for (let fx = tx; fx < tx + tw; fx += FINE) {
           for (let fy = ty; fy < ty + th; fy += FINE) {
             const fw = Math.min(FINE, tx + tw - fx);
@@ -54,7 +54,7 @@ async function seedForbidden() {
             if (isTileFullyOutside(fx, fy, fw, fh)) {
               forbidden.push({ x: fx, y: fy, width: fw, height: fh });
             } else if (isTilePartiallyOutside(fx, fy, fw, fh)) {
-              // ULTRA bontás a kapszula peremén
+              // ULTRA subdivision at the capsule edge
               for (let ux = fx; ux < fx + fw; ux += ULTRA) {
                 for (let uy = fy; uy < fy + fh; uy += ULTRA) {
                   const uw = Math.min(ULTRA, fx + fw - ux);
@@ -73,7 +73,7 @@ async function seedForbidden() {
 
   console.log(`Generated ${forbidden.length} forbidden tiles, inserting...`);
 
-  // Batch insert 500-as csomagokban (BigInt miatt createMany-nél lehet limit)
+  // Batch insert in groups of 500 (createMany may have limits with BigInt)
   const BATCH = 500;
   for (let i = 0; i < forbidden.length; i += BATCH) {
     const chunk = forbidden.slice(i, i + BATCH);

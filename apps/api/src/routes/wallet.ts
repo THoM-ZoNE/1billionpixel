@@ -7,14 +7,13 @@ import { verifySignature }   from "../lib/auth.js";
 const walletRoutes: FastifyPluginAsync = async (app) => {
 
   // GET /api/wallet/:address  — load wallet state
-  // Csak akkor szinkronizál on-chain, ha a wallet még nem létezik, vagy az adat
-  // régebbi 5 percnél. Ez megakadályozza, hogy oldalfrissítésre felulírja a
-  // manuális kvótát (a manualOverride check a syncWalletBalance-ban is benn van).
+  // Sync on-chain only when the wallet does not exist yet, or the data is older than 5 minutes.
+  // This prevents page refresh from overwriting manual quota (manualOverride check is also in syncWalletBalance).
   app.get<{ Params: { address: string } }>("/:address", async (req, reply) => {
     const { address } = req.params;
     const existing = await prisma.wallet.findUnique({ where: { address } });
     if (!existing) {
-      // Új wallet — létrehozzuk on-chain adatokkal
+      // New wallet — create from on-chain data
       const wallet = await syncWalletBalance(address);
       return reply.send(wallet);
     }
@@ -24,10 +23,10 @@ const walletRoutes: FastifyPluginAsync = async (app) => {
       const wallet = await syncWalletBalance(address);
       return reply.send(wallet);
     }
-    // Friss adat — közvetlen DB válasz, nincs on-chain hívás
-    // Fontos: BigInt mezőket kötelező string-re konvertálni (JSON.stringify nem kezeli a BigInt-et)
-    // availableQuota-t mindig on-the-fly számítjuk: totalQuota - lockedPixels
-    // Így sosem lesz elcsúszikás a DB-ben tárolt érték és a valóság között
+    // Fresh data — direct DB response, no on-chain call
+    // Important: BigInt fields must be converted to strings (JSON.stringify cannot handle BigInt)
+    // availableQuota is always computed on-the-fly: totalQuota - lockedPixels
+    // This avoids drift between stored DB values and reality
     const effectiveAvailable = existing.totalQuota >= existing.lockedPixels
       ? existing.totalQuota - existing.lockedPixels
       : 0n;

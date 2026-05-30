@@ -5,7 +5,7 @@ const prisma = new PrismaClient();
 
 async function main() {
   const email = "thomzone@thomzone.net";
-  const password = "jelszot_beírod_ide"; // csak egyszer futtatod majd npx tsx adminUser.ts-vel, utána törölheted vagy megváltoztathatod ezt a jelszót
+  const password = "enter_password_here"; // run only once with npx tsx adminUser.ts, then delete or change this password
   const passwordHash = await bcrypt.hash(password, 12);
 
   await prisma.adminUser.upsert({
@@ -14,7 +14,7 @@ async function main() {
     create: { email, passwordHash },
   });
 
-  console.log(`Admin létrehozva: ${email}`);
+  console.log(`Admin created: ${email}`);
   await prisma.$disconnect();
 }
 

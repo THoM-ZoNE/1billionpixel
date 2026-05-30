@@ -162,7 +162,7 @@ export function ClaimSection() {
     ctx.save();
     ctx.translate(tx, ty);
 
-    // Forbidden zóna — mindig piros a kapszulán kívül
+    // Forbidden area — always red outside the capsule
     ctx.save();
     ctx.fillStyle = "rgba(160,20,20,0.65)";
     ctx.beginPath();
@@ -171,7 +171,7 @@ export function ClaimSection() {
     ctx.fill("evenodd");
     ctx.restore();
 
-    // Kapszula clip
+    // Capsule clip
     ctx.save();
     drawCapsulePath(ctx, sx, sy, 0, 0);
     ctx.clip();
@@ -185,7 +185,7 @@ export function ClaimSection() {
     for (let x = 0; x < WORLD_W * sx; x += step) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, WORLD_H * sy); ctx.stroke(); }
     for (let y = 0; y < WORLD_H * sy; y += step) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(WORLD_W * sx, y); ctx.stroke(); }
 
-    // Területek
+    // Areas
     (Array.isArray(areas) ? areas : []).forEach((a: Area) => {
       if (a.status === "FORBIDDEN" || a.status === "RELEASED") return;
       const cx = a.x * sx, cy = a.y * sy, cw = a.width * sx, ch = a.height * sy;
@@ -196,7 +196,7 @@ export function ClaimSection() {
       ctx.strokeRect(cx, cy, cw, ch);
     });
 
-    // Preview + kijelölés
+    // Preview + selection
     const sel = selectionRef.current ?? selection;
     if (sel && previewImgRef.current) {
       ctx.globalAlpha = 0.75;
@@ -219,7 +219,7 @@ export function ClaimSection() {
       ctx.strokeRect(x * sx, y * sy, w * sx, h * sy);
       ctx.setLineDash([]);
 
-      // Mozgatás ikon
+      // Move icon
       if (!draggingRef.current) {
         const cx = (x + w / 2) * sx;
         const cy = (y + h / 2) * sy;
@@ -230,7 +230,7 @@ export function ClaimSection() {
         ctx.textAlign = "left";
       }
 
-      // Snap él kiemelés
+      // Snap edge highlight
       const { xEdges, yEdges } = (() => {
         const xe = [0, WORLD_W]; const ye = [0, WORLD_H];
         (Array.isArray(areas) ? areas : []).forEach(a => { xe.push(a.x, a.x + a.width); ye.push(a.y, a.y + a.height); });
@@ -243,10 +243,10 @@ export function ClaimSection() {
       if (yEdges.some(e => Math.abs(y - e)        <= 1)) { ctx.beginPath(); ctx.moveTo(x * sx,       y * sy); ctx.lineTo((x+w) * sx,   y * sy);       ctx.stroke(); }
       if (yEdges.some(e => Math.abs((y + h) - e)  <= 1)) { ctx.beginPath(); ctx.moveTo(x * sx, (y+h) * sy); ctx.lineTo((x+w) * sx, (y+h) * sy);     ctx.stroke(); }
 
-      // Felirat
-      const label = !valid     ? "Kapszulán kívül!"
-                  : !noOverlap ? "Foglalt területbe lóg!"
-                  : !canCl     ? "Nincs elég quota!"
+      // Label
+      const label = !valid     ? "Outside the capsule!"
+                  : !noOverlap ? "Overlaps claimed area!"
+                  : !canCl     ? "Insufficient quota!"
                   : `${Math.round(w)} × ${Math.round(h)} px`;
       ctx.fillStyle = isOk ? "rgba(20,241,149,0.9)" : "rgba(239,68,68,0.9)";
       ctx.font = `bold ${Math.max(10, 11 / scale)}px monospace`;
@@ -255,7 +255,7 @@ export function ClaimSection() {
 
     ctx.restore(); // clip restore
 
-    // Kapszula stroke
+    // Capsule stroke
     drawCapsulePath(ctx, sx, sy, 0, 0);
     ctx.strokeStyle = "rgba(20,241,149,0.5)";
     ctx.lineWidth = 2;
@@ -301,7 +301,7 @@ export function ClaimSection() {
     return () => canvas.removeEventListener("wheel", onWheel);
   }, [draw]);
 
-  // ── World koordináta ──────────────────────────────────────────────────────
+  // ── World coordinates ─────────────────────────────────────────────────────
   const toWorld = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current; if (!canvas) return null;
     const rect   = canvas.getBoundingClientRect();
@@ -347,7 +347,7 @@ export function ClaimSection() {
     const pos = toWorldSnapped(e); if (!pos) return;
     const sel = selectionRef.current ?? selection;
 
-    // Mozgatás ha a kijelölésen belül kattint
+    // Move when clicking inside the selection
     if (sel && pos.wx >= sel.x && pos.wx <= sel.x + sel.w && pos.wy >= sel.y && pos.wy <= sel.y + sel.h) {
       isMoveRef.current     = true;
       draggingRef.current   = true;
@@ -356,7 +356,7 @@ export function ClaimSection() {
       return;
     }
 
-    // Új kijelölés
+    // New selection
     isMoveRef.current    = false;
     dragStart.current    = { wx: pos.wx, wy: pos.wy };
     draggingRef.current  = true;
@@ -379,7 +379,7 @@ export function ClaimSection() {
       return;
     }
 
-    // Cursor hover frissítés (csak ha nem húzunk)
+    // Update cursor hover (only when not dragging)
     if (!draggingRef.current) {
       const pos = toWorld(e);
       const sel = selectionRef.current ?? selection;
@@ -393,7 +393,7 @@ export function ClaimSection() {
 
     const pos = toWorldSnapped(e); if (!pos) return;
 
-    // Mozgatás
+    // Move
     if (isMoveRef.current && moveOffsetRef.current) {
       const sel = selectionRef.current ?? selection;
       if (!sel) return;
@@ -405,7 +405,7 @@ export function ClaimSection() {
       return;
     }
 
-    // Új kijelölés rajzolás
+    // Draw new selection
     if (!dragStart.current) return;
     let w = Math.abs(pos.wx - dragStart.current.wx) || 1;
     let h = Math.abs(pos.wy - dragStart.current.wy) || 1;
@@ -435,15 +435,15 @@ export function ClaimSection() {
     const sel = selectionRef.current;
     if (!sel) return;
     if (sel.w < MIN_PX || sel.h < MIN_PX) {
-      setValidationError(`Minimum kijelölhető méret: ${MIN_PX}×${MIN_PX} px`);
+      setValidationError(`Minimum selectable size: ${MIN_PX}×${MIN_PX} px`);
       selectionRef.current = null; draw(); return;
     }
     if (!isRectInsideCapsule(sel.x, sel.y, sel.w, sel.h)) {
-      setValidationError("A kijelölt terület a kapszulán kívülre esik!");
+      setValidationError("The selected area lies outside the capsule!");
       selectionRef.current = null; draw(); return;
     }
     if (overlapsAnyArea(sel.x, sel.y, sel.w, sel.h)) {
-      setValidationError("A kijelölt terület egy már foglalt területbe lóg!");
+      setValidationError("The selected area overlaps an already claimed area!");
       selectionRef.current = null; draw(); return;
     }
     setSelection({ ...sel });
@@ -460,7 +460,7 @@ export function ClaimSection() {
 
   return (
     <section style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-      {/* Fejléc */}
+      {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.75rem" }}>
         <div>
           <h2 style={{ fontSize: "1.25rem", fontWeight: 700, color: "white", margin: 0 }}>Claim Your Pixels</h2>
@@ -488,13 +488,13 @@ export function ClaimSection() {
               style={{ padding: "0.3rem 0.75rem", borderRadius: "0.4rem", border: "none",
                 cursor: "pointer", fontSize: "0.75rem", fontWeight: 600,
                 background: "rgba(239,68,68,0.2)", color: "#ef4444" }}>
-              ✕ Törlés
+              ✕ Clear
             </button>
           )}
         </div>
       </div>
 
-      {/* Infó sor */}
+      {/* Info row */}
       <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.3)", fontFamily: "monospace", display: "flex", gap: "1.5rem", flexWrap: "wrap" }}>
         <span>Canvas: {WORLD_W.toLocaleString()} × {WORLD_H.toLocaleString()} px</span>
         <span>Zoom: {zoomDisplay.toFixed(2)}×</span>
@@ -504,7 +504,7 @@ export function ClaimSection() {
               Selection: {selection.x},{selection.y} → {selection.w}×{selection.h}
             </span>
             <span style={{ color: canClaim ? "rgba(20,241,149,0.9)" : "rgba(239,68,68,0.9)" }}>
-              {pixelCount.toLocaleString()} pixel {canClaim ? "✓" : "— nincs elég quota"}
+              {pixelCount.toLocaleString()} px {canClaim ? "✓" : "— insufficient quota"}
             </span>
           </>
         )}
@@ -534,7 +534,7 @@ export function ClaimSection() {
         />
       </div>
 
-      {/* Validáció hiba */}
+      {/* Validation error */}
       {validationError && (
         <div style={{ color: "#f87171", fontSize: "0.78rem", fontFamily: "monospace",
           background: "rgba(239,68,68,0.1)", borderRadius: "0.5rem",

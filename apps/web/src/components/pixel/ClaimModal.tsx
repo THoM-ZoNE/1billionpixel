@@ -77,9 +77,9 @@ export function ClaimModal({ region, availableQuota, onClose, onImageSelected }:
     setLoading(true);
     setError(null);
     try {
-      // Wallet address — wallet adapter-ből, nem window.solana-ból
+      // Wallet address — from wallet adapter, not window.solana
       const address = wallet.publicKey?.toBase58();
-      if (!address) throw new Error("Wallet nincs csatlakoztatva");
+      if (!address) throw new Error("Wallet is not connected");
 
       const formData = new FormData();
       formData.append("x",      String(region.x));
@@ -89,13 +89,13 @@ export function ClaimModal({ region, availableQuota, onClose, onImageSelected }:
       if (link.trim()) formData.append("link", link.trim());
       if (imageFile)   formData.append("image", imageFile);
 
-      // Ha a wallet skipSignature=true, a middleware engedi át signature nélkül
+      // If wallet skipSignature=true, middleware allows request without signature
       let headers: Record<string, string> = {
         "walletaddress": address,
       };
 
-      // Ha a wallet adapter tud aláírni, az aláírást is melleküldjük
-      // (ha skipSignature=true, a backend figyelmen kívül hagyja)
+      // If the wallet adapter can sign, send the signature too
+      // (if skipSignature=true, the backend ignores it)
       if (wallet.signMessage) {
         try {
           const claimMessage   = `claim:${address}:${Date.now()}`;
@@ -105,11 +105,11 @@ export function ClaimModal({ region, availableQuota, onClose, onImageSelected }:
           headers["signature"]        = signature;
           headers["x-claim-message"]  = claimMessage;
         } catch {
-          // Felhasználó elutasította az aláírást — skipSignature esetén tovább mehet
+          // User rejected signing — can proceed if skipSignature is enabled
         }
       }
 
-      // Közvetlen backend hívás (nem Next.js proxyn át)
+      // Direct backend call (not via Next.js proxy)
       const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
       const res = await fetch(`${apiBase}/canvas/claim`, {
         method: "POST",
@@ -126,7 +126,7 @@ export function ClaimModal({ region, availableQuota, onClose, onImageSelected }:
       setClaimedAreaId(data?.id ?? data?.area?.id ?? null);
       setStep("done");
     } catch (err: any) {
-      setError(err?.message ?? "Hiba történt a claim során.");
+      setError(err?.message ?? "An error occurred during claim.");
     } finally {
       setLoading(false);
     }
@@ -304,7 +304,7 @@ const renderError = () => error ? (
         {imagePreview
           ? <img src={imagePreview} alt="preview" style={{ width: "100%", maxHeight: 180, objectFit: "contain", display: "block" }} />
           : <div style={{ padding: "2rem", color: "rgba(255,255,255,0.18)", fontSize: "0.8rem", fontFamily: "monospace" }}>
-              Nincs kép megadva
+              No image provided
             </div>
         }
       </div>

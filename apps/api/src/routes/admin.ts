@@ -8,16 +8,16 @@ const JWT_SECRET = process.env.JWT_SECRET ?? "jwt_titkos_kulcs";
 
 const adminRoutes: FastifyPluginAsync = async (app) => {
 
-  // ✅ Login — NEM védett
+  // ✅ Login — UNPROTECTED
   app.post<{ Body: { email: string; password: string } }>(
     "/login",
     async (req, reply) => {
-      console.log("JWT_SECRET:", process.env.JWT_SECRET ? "VAN ✓" : "HIÁNYZIK ✗");
+      console.log("JWT_SECRET:", process.env.JWT_SECRET ? "OK ✓" : "MISSING ✗");
       const { email, password } = req.body;
       const admin = await prisma.adminUser.findUnique({ where: { email } });
-      if (!admin) return reply.status(401).send({ error: "Hibás email vagy jelszó" });
+      if (!admin) return reply.status(401).send({ error: "Invalid email or password" });
       const valid = await bcrypt.compare(password, admin.passwordHash);
-      if (!valid) return reply.status(401).send({ error: "Hibás email vagy jelszó" });
+      if (!valid) return reply.status(401).send({ error: "Invalid email or password" });
       const token = jwt.sign(
         { adminId: admin.id, email: admin.email },
         JWT_SECRET,
@@ -27,7 +27,7 @@ const adminRoutes: FastifyPluginAsync = async (app) => {
     }
   );
 
-  // ✅ Védett sub-plugin
+  // ✅ Protected sub-plugin
   await app.register(async (protectedApp) => {
 
     // JWT preHandler — minden route-ra ebben a pluginben
@@ -39,7 +39,7 @@ const adminRoutes: FastifyPluginAsync = async (app) => {
       try {
         jwt.verify(auth.slice(7), JWT_SECRET);
       } catch {
-        return reply.status(401).send({ error: "Token lejárt vagy érvénytelen" });
+        return reply.status(401).send({ error: "Token expired or invalid" });
       }
     });
 
@@ -72,8 +72,8 @@ const adminRoutes: FastifyPluginAsync = async (app) => {
     protectedApp.patch<{ Params: { address: string }; Body: { quota: number } }>(
       "/wallets/:address/quota",
       async (req) => {
-        // Először lekérjük a jelenlegi lockedPixels értéket,
-        // hogy az availableQuota = új quota - már lefoglalt pixelek legyen
+        // First fetch current lockedPixels value,
+        // so availableQuota = new quota - already reserved pixels
         const existing = await prisma.wallet.findUnique({
           where: { address: req.params.address },
           select: { lockedPixels: true },
@@ -115,7 +115,7 @@ const adminRoutes: FastifyPluginAsync = async (app) => {
   "/test-wallet",
   async (req) => {
     const { address, quota = 10_000_000, skipSignature = false } = req.body;
-    // Létező wallet esetén figyelembe vesszük a már lefoglalt pixeleket
+    // For existing wallet, take reserved pixels into account
     const existing = await prisma.wallet.findUnique({
       where: { address },
       select: { lockedPixels: true },
@@ -145,12 +145,12 @@ protectedApp.delete<{ Params: { id: string } }>("/areas/:id", async (req, reply)
   });
   if (!area) return reply.status(404).send({ error: "Not found" });
 
-  // Tranzakcióban töröl + visszaírja a kvótát
+  // Delete in transaction and restore quota
   await prisma.$transaction([
-    // 1. Area törlése
+    // 1. Delete area
     prisma.pixelArea.delete({ where: { id: req.params.id } }),
 
-    // 2. lockedPixels csökkentése + availableQuota visszaírása
+    // 2. Decrement lockedPixels + restore availableQuota
     prisma.wallet.update({
       where: { address: area.walletAddress },
       data: {
@@ -183,19 +183,19 @@ protectedApp.delete<{ Params: { id: string } }>("/areas/:id", async (req, reply)
 
     // DELETE /admin/forbidden
 protectedApp.delete("/forbidden", async () => {
-  // Lekérjük az összes forbidden area-t walletcímmel és pixelszámmal
+  // Get all forbidden areas with wallet address and pixel count
   const forbiddenAreas = await prisma.pixelArea.findMany({
     where: { status: "FORBIDDEN" },
     select: { walletAddress: true, pixelCount: true },
   });
 
-  // Wallet-enkénti összegzés
+  // Aggregate per wallet
   const quotaMap = new Map<string, bigint>();
   for (const a of forbiddenAreas) {
     quotaMap.set(a.walletAddress, (quotaMap.get(a.walletAddress) ?? 0n) + a.pixelCount);
   }
 
-  // Tranzakcióban töröl + minden érintett wallet kvótáját visszaírja
+  // Delete in transaction + restore quota for every affected wallet
   await prisma.$transaction([
     prisma.pixelArea.deleteMany({ where: { status: "FORBIDDEN" } }),
     ...Array.from(quotaMap.entries()).map(([address, pixels]) =>

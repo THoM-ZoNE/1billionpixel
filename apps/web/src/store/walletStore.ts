@@ -25,7 +25,7 @@ export const useWalletStore = create<WalletState>((set) => ({
       set({ isLoading: false });
     }
   },
-  refreshWalletData: async (address) => {        // ← ÚJ
+  refreshWalletData: async (address) => {        // ← NEW
     try {
       const data = await api.get<WalletDTO>(`/wallet/${address}`);
       set({ walletData: data });

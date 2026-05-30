@@ -6,7 +6,7 @@ import dynamic from "next/dynamic";
 import { Press_Start_2P, Pixelify_Sans } from "next/font/google";
 import { Providers } from "./providers";
 
-// SSR kikapcsolva — a Navbar useWallet()-et használ, ami WalletProvider nélkül SSR-ben kivételt dob
+// SSR disabled — Navbar uses useWallet(), which would throw during SSR without WalletProvider
 const Navbar = dynamic(
   () => import("@/components/layout/Navbar").then(m => m.Navbar),
   { ssr: false }

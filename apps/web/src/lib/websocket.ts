@@ -13,7 +13,7 @@ export const connectWebSocket = () => {
       listeners.get(data.type)?.forEach((fn) => fn(data));
       listeners.get("*")?.forEach((fn) => fn(data));
     } catch {
-      // invalid JSON – figyelmen kívül hagyja
+      // invalid JSON – ignore
     }
   };
 

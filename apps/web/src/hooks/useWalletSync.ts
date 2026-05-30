@@ -18,11 +18,11 @@ export const useWalletSync = () => {
     if (!wallet.publicKey) return;
     setError(null);
     try {
-      // Először lekérdezzük az aktuális wallet állapotát.
-      // Ha skipSignature be van kapcsolva, nem nyílik meg a Phantom wallet.
+      // First fetch the current wallet state.
+      // If skipSignature is enabled, Phantom will not open.
       const walletData = await fetchWallet(wallet.publicKey.toBase58());
       if (walletData?.skipSignature) {
-        // Aláírás kihagyva az admin által — kész
+        // Signing skipped by admin — done
         return;
       }
       const { message, signature } = await signAuthMessage(wallet);
@@ -34,7 +34,7 @@ export const useWalletSync = () => {
       const msg =
         err?.response?.data?.error ||
         err?.message ||
-        "Wallet kapcsolódás sikertelen.";
+        "Wallet connection failed.";
       setError(msg);
     }
   };

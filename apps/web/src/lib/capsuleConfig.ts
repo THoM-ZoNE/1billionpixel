@@ -1,24 +1,24 @@
 // ─── Capsule Geometry — single source of truth ───────────────────────────────
-// A kapszula valódi pixel-dimenziói (world-koordináta rendszer)
+// The capsule's actual pixel dimensions in world coordinates
 export const CAPSULE_W = 51136;
 export const CAPSULE_H = 21494;
 export const CAPSULE_R = 10747; // = CAPSULE_H / 2
 
-// A "world" canvas, ami 20%-kal nagyobb, hogy a sarokzónák is látszódjanak
+// The "world" canvas is 20% larger so the edge zones remain visible
 export const WORLD_W = 61363; // CAPSULE_W × 1.2
 export const WORLD_H = 25793; // CAPSULE_H × 1.2
 
-// A kapszula eltolása a world-on belül (középre igazítás)
+// Offset the capsule inside the world canvas (centered)
 export const CAPSULE_OFFSET_X = (WORLD_W - CAPSULE_W) / 2; // ≈ 5113
 export const CAPSULE_OFFSET_Y = (WORLD_H - CAPSULE_H) / 2; // ≈ 2149
 
-// A megjelenítési arány (display_width / display_height)
+// Display aspect ratio (display_width / display_height)
 export const WORLD_RATIO = WORLD_W / WORLD_H; // ≈ 2.379
 
-// ─── Capsule path rajzoló — bármely canvas mérethez ──────────────────────────
-// A kapszulát a world-koordináta rendszerben rajzolja, canvas px-ben.
-// ox/oy: a world origójának eltolása canvas px-ben (pan)
-// scaleX/scaleY: world px → canvas px skálázás
+// ─── Capsule path drawer — works for any canvas size ─────────────────────────
+// Draw the capsule in world coordinates, mapped to canvas pixels.
+// ox/oy: world origin offset in canvas pixels (pan)
+// scaleX/scaleY: world px → canvas px scaling
 export function drawCapsulePath(
   ctx: CanvasRenderingContext2D,
   scaleX: number,
@@ -47,7 +47,7 @@ export function drawCapsulePath(
 
 // ─── Koordináta-konverziók ────────────────────────────────────────────────────
 
-/** World-koordináta → canvas px */
+/** World coordinates → canvas px */
 export function worldToCanvas(
   wx: number, wy: number,
   canvasW: number, canvasH: number,
@@ -61,7 +61,7 @@ export function worldToCanvas(
   };
 }
 
-/** Canvas px → world-koordináta */
+/** Canvas px → world coordinates */
 export function canvasToWorld(
   cx: number, cy: number,
   canvasW: number, canvasH: number,
@@ -75,7 +75,7 @@ export function canvasToWorld(
   };
 }
 
-/** Egy world-koordinátás pont a kapszulán belül van-e? */
+/** Is a world-coordinate point inside the capsule? */
 export function isInsideCapsule(wx: number, wy: number): boolean {
   const lx = wx - CAPSULE_OFFSET_X;
   const ly = wy - CAPSULE_OFFSET_Y;
@@ -83,27 +83,27 @@ export function isInsideCapsule(wx: number, wy: number): boolean {
 
   const midY = CAPSULE_H / 2;
 
-  // Bal félkör zóna
+  // Left semicircle zone
   if (lx < CAPSULE_R) {
     const dx = lx - CAPSULE_R;
     const dy = ly - midY;
     return dx * dx + dy * dy <= CAPSULE_R * CAPSULE_R;
   }
-  // Jobb félkör zóna
+  // Right semicircle zone
   if (lx > CAPSULE_W - CAPSULE_R) {
     const dx = lx - (CAPSULE_W - CAPSULE_R);
     const dy = ly - midY;
     return dx * dx + dy * dy <= CAPSULE_R * CAPSULE_R;
   }
-  // Téglalap zóna
+  // Rectangle zone
   return true;
 }
 
-/** Egy téglalap (world-koordinátás) teljes egészében a kapszulán belül van-e? */
+/** Is a rectangle (world coordinates) entirely inside the capsule? */
 export function isRectInsideCapsule(
   wx: number, wy: number, ww: number, wh: number
 ): boolean {
-  // Mind a 4 sarokpontot ellenőrizzük
+  // Check all 4 corner points
   return (
     isInsideCapsule(wx,      wy) &&
     isInsideCapsule(wx + ww, wy) &&

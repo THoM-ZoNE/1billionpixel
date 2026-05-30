@@ -47,7 +47,7 @@ const canvasRoutes: FastifyPluginAsync = async (app) => {
       let imageKey: string | undefined;
       let imageType: string | undefined;
 
-      // Multipart: kép + JSON mezők
+      // Multipart: image + JSON fields
       const parts = req.parts();
       const fields: Record<string, string> = {};
 
@@ -73,7 +73,7 @@ const canvasRoutes: FastifyPluginAsync = async (app) => {
         }
       }
 
-      // Validálás
+      // Validation
       const x = parseInt(fields.x);
       const y = parseInt(fields.y);
       const width = parseInt(fields.width);
@@ -83,7 +83,7 @@ const canvasRoutes: FastifyPluginAsync = async (app) => {
         isNaN(x) || isNaN(y) || isNaN(width) || isNaN(height) ||
         width <= 0 || height <= 0 ||
         x < 0 || y < 0 ||
-        x + width > 100000 || y + height > 100000 // canvas méret limit
+        x + width > 100000 || y + height > 100000 // canvas size limit
       ) {
         return reply.status(400).send({ error: "Invalid coordinates or dimensions" });
       }

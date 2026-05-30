@@ -6,7 +6,7 @@ interface CanvasState {
   viewport:    { x: number; y: number; scale: number };
   addArea:     (area: PixelAreaDTO) => void;
   removeArea:  (id: string) => void;
-  setAreas:    (areas: any) => void;  // any hogy ne dobjon TS hibát
+  setAreas:    (areas: any) => void;  // any to avoid TS error
   setViewport: (v: Partial<CanvasState["viewport"]>) => void;
 }
 

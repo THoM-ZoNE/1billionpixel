@@ -52,7 +52,7 @@ const pixelRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(400).send({ error: "Outside capsule bounds" });
     }
 
-    // 1. Verify wallet ownership — skipSignature esetén átugorjuk
+    // 1. Verify wallet ownership — skip if skipSignature
     const walletForSigCheck = await prisma.wallet.findUnique({
       where: { address: body.walletAddress },
       select: { skipSignature: true },
@@ -69,7 +69,7 @@ const pixelRoutes: FastifyPluginAsync = async (app) => {
       if (!valid) return reply.status(401).send({ error: "Invalid signature" });
     }
 
-    // 2. Wallet lekérése DB-ből
+    // 2. Fetch wallet from DB
     const dbWallet = await prisma.wallet.findUnique({
       where: { address: body.walletAddress },
     });

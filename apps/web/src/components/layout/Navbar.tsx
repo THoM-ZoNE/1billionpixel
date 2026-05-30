@@ -4,7 +4,7 @@ import { useWalletStore }     from "@/store/walletStore";
 import dynamic from "next/dynamic";
 import Link                   from "next/link";
 
-// SSR kikapcsolva — ez oldja meg a hydration hibát
+// Disable SSR — this avoids hydration issues
 const WalletMultiButton = dynamic(
   () => import("@solana/wallet-adapter-react-ui").then(m => m.WalletMultiButton),
   { ssr: false }

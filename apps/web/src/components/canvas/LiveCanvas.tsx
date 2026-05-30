@@ -684,7 +684,7 @@ const stopZoom = () => {
       {/* Divider */}
       <div style={{ height: 1, background: "linear-gradient(90deg, #9945FF, #14F195)", opacity: 0.3 }} />
 
-      {/* Info sorok */}
+      {/* Info rows */}
       {[
         ["Wallet",  selectedArea.walletAddress
           ? `${selectedArea.walletAddress.slice(0,6)}...${selectedArea.walletAddress.slice(-4)}`
@@ -718,7 +718,7 @@ const stopZoom = () => {
         </a>
       )}
 
-      {/* Zoom to area + Link másoló */}
+      {/* Zoom to area + Link copier */}
       <style>{`
   .area-action-btn {
     transition: background 180ms ease, border-color 180ms ease, color 180ms ease;
@@ -785,7 +785,7 @@ const stopZoom = () => {
           <button
   onMouseDown={() => startZoom(-1)}
   onMouseUp={stopZoom}
-  onMouseLeave={stopZoom}   // ← ha elhúzza az egeret, leáll
+  onMouseLeave={stopZoom}   // ← when the mouse leaves, stop
   onTouchStart={() => startZoom(-1)}
   onTouchEnd={stopZoom} style={{ background: "none", border: "none", color: "#14f195", fontSize: "1.1rem", cursor: "pointer", padding: "0 4px" }}>{"−"}</button>
           <span style={{ fontFamily: "monospace", fontSize: "0.7rem", color: "rgba(255,255,255,0.5)", minWidth: 36, textAlign: "center" }}>{zp}%</span>

@@ -104,7 +104,7 @@ function WalletTable({
   };
 
   const deleteArea = async (areaId: string) => {
-    if (!confirm("Biztosan törlöd ezt a területet és képét?")) return;
+    if (!confirm("Are you sure you want to delete this area and image?")) return;
     await fetch(`/api/admin/areas/${areaId}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${token}` },
@@ -132,10 +132,10 @@ function WalletTable({
       <thead>
         <tr style={{ borderBottom: "1px solid #333" }}>
           <th style={{ textAlign: "left", padding: "6px 8px" }}>Address</th>
-          <th style={{ padding: "6px 8px" }}>Kvóta</th>
+          <th style={{ padding: "6px 8px" }}>Quota</th>
           <th style={{ padding: "6px 8px" }}>Skip Sign</th>
-          <th style={{ padding: "6px 8px" }}>Területek</th>
-          <th style={{ padding: "6px 8px" }}>Kvóta állítás</th>
+          <th style={{ padding: "6px 8px" }}>Areas</th>
+          <th style={{ padding: "6px 8px" }}>Set quota</th>
         </tr>
       </thead>
       <tbody>
@@ -155,14 +155,14 @@ function WalletTable({
                 {((w.totalQuota ?? 0).toLocaleString())}
               </td>
 
-              {/* Skip Signature kapcsoló */}
+              {/* Skip Signature toggle */}
               <td style={{ textAlign: "center", padding: "6px 8px" }}>
                 <button
                   onClick={() => toggleSkipSig(w.address, w.skipSignature)}
                   title={
                     w.skipSignature
-                      ? "Sign kötelező visszaállítása"
-                      : "Sign ellenőrzés kikapcsolása"
+                      ? "Restore sign requirement"
+                      : "Disable sign verification"
                   }
                   style={{
                     padding: "2px 10px",
@@ -179,7 +179,7 @@ function WalletTable({
                 </button>
               </td>
 
-              {/* Területek expand gomb */}
+              {/* Areas expand button */}
               <td style={{ textAlign: "center", padding: "6px 8px" }}>
                 <button
                   onClick={() =>
@@ -199,7 +199,7 @@ function WalletTable({
                 </button>
               </td>
 
-              {/* Kvóta állítás */}
+              {/* Set quota */}
               <td style={{ padding: "6px 8px" }}>
                 <QuotaEditor
                   address={w.address}
@@ -209,7 +209,7 @@ function WalletTable({
               </td>
             </tr>
 
-            {/* Expandable területek lista */}
+            {/* Expandable areas list */}
             {expanded === w.address && (
               <tr key={`${w.address}-areas`}>
                 <td
@@ -218,7 +218,7 @@ function WalletTable({
                 >
                   {w.areas.length === 0 ? (
                     <span style={{ color: "#666", fontSize: 12 }}>
-                      Nincs terület
+                      No areas
                     </span>
                   ) : (
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -267,7 +267,7 @@ function WalletTable({
                           </div>
                           <button
                             onClick={() => deleteArea(area.id)}
-                            title="Terület és kép törlése"
+                            title="Delete area and image"
                             style={{
                               background: "#7f1d1d",
                               border: "none",
@@ -297,7 +297,7 @@ function WalletTable({
 // ─── Main Admin Page ───────────────────────────────────────────────────────────
 
 export default function AdminPage() {
-  // email/jelszó login state-ek
+  // email/password login state
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [authed, setAuthed] = useState(false);
@@ -342,7 +342,7 @@ export default function AdminPage() {
     setAuthed(false);
   };
 
-  // ── Auto-auth ha van mentett token ──
+  // ── Auto-auth if there is a saved token ──
   useEffect(() => {
     if (token) {
       fetch(`${API}/api/admin/wallets`, {
@@ -392,7 +392,7 @@ export default function AdminPage() {
   };
 
   const deleteAllForbidden = async () => {
-    if (!confirm("Biztosan törlöd az összes Forbidden zónát?")) return;
+    if (!confirm("Are you sure you want to delete all Forbidden zones?")) return;
     await fetch(`${API}/api/admin/forbidden`, {
       method: "DELETE",
       headers: authHeaders,
@@ -400,7 +400,7 @@ export default function AdminPage() {
     fetchForbidden();
   };
 
-  // ── Login képernyő ──
+  // ── Login screen ──
   if (!authed) return (
     <div style={{ minHeight: "100vh", background: "#0a0a0a", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "monospace" }}>
       <div style={{ background: "#0f1a0f", border: "1px solid rgba(20,241,149,0.2)", borderRadius: 12, padding: "2rem", width: 340, display: "flex", flexDirection: "column", gap: 12 }}>
@@ -411,7 +411,7 @@ export default function AdminPage() {
           style={{ padding: "8px 12px", background: "#111", border: "1px solid #333", color: "#fff", borderRadius: 6, fontSize: 14, boxSizing: "border-box" as const }}
         />
         <input
-          type="password" placeholder="Jelszó"
+          type="password" placeholder="Password"
           value={password} onChange={e => setPassword(e.target.value)}
           onKeyDown={e => e.key === "Enter" && handleLogin()}
           style={{ padding: "8px 12px", background: "#111", border: "1px solid #333", color: "#fff", borderRadius: 6, fontSize: 14, boxSizing: "border-box" as const }}
@@ -420,14 +420,14 @@ export default function AdminPage() {
           onClick={handleLogin}
           style={{ padding: "8px 16px", background: "#14f195", color: "#000", border: "none", borderRadius: 6, cursor: "pointer", fontWeight: "bold", fontSize: 14 }}
         >
-          Belépés
+          Log in
         </button>
         {loginMsg && <div style={{ color: "#f87171", fontSize: "0.8rem" }}>{loginMsg}</div>}
       </div>
     </div>
   );
 
-  // ── Admin felület ── (marad az eredeti, csak logout gomb kerül a fejlécbe)
+  // ── Admin panel ── (stays the same, only logout button is added to the header)
   return (
     <div style={{ minHeight: "100vh", background: "#0a0a0a", color: "#fff", fontFamily: "monospace", padding: "32px 24px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32, paddingTop: 50 }}>
@@ -443,9 +443,9 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {/* ── Teszt Wallet létrehozás ── */}
+      {/* ── Test Wallet creation ── */}
       <section style={{ marginTop: 32 }}>
-        <h3 style={{ color: "#aaa", marginBottom: 12 }}>Teszt Wallet (sign nélkül)</h3>
+        <h3 style={{ color: "#aaa", marginBottom: 12 }}>Test Wallet (signless)</h3>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <input value={testAddress} onChange={e => setTestAddress(e.target.value)} placeholder="Wallet address"
             style={{ padding: "6px 10px", background: "#111", border: "1px solid #333", color: "#fff", borderRadius: 6, fontSize: 13, width: 340 }} />
@@ -458,7 +458,7 @@ export default function AdminPage() {
         </div>
       </section>
 
-      {/* ── Forbidden Zónák ── */}
+      {/* ── Forbidden Zones ── */}
       <section style={{ marginTop: 32 }}>
         <h3 style={{ color: "#aaa", marginBottom: 12 }}>Forbidden Zones</h3>
         <button onClick={deleteAllForbidden}
@@ -466,11 +466,11 @@ export default function AdminPage() {
           🗑️ Delete all Forbidden zones
         </button>
         {forbiddenZones.length > 0 && (
-          <div style={{ marginTop: 8, color: "#666", fontSize: 12 }}>{forbiddenZones.length} zóna aktív</div>
+          <div style={{ marginTop: 8, color: "#666", fontSize: 12 }}>{forbiddenZones.length} active zones</div>
         )}
       </section>
 
-      {/* ── Wallet lista ── */}
+      {/* ── Wallet list ── */}
       <section style={{ marginTop: 32 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
           <h3 style={{ color: "#aaa", margin: 0 }}>Wallet-ek ({wallets.length})</h3>
