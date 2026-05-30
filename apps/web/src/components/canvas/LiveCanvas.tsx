@@ -81,7 +81,7 @@ export function LiveCanvas() {
   const dragMovedRef   = useRef(false);
   const [selectedArea, setSelectedArea] = useState<PixelArea | null>(null);
   const zoomIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // ── Focus area (URL paraméterből) ─────────────────────────────────────
+  // ── Focus area (from URL parameter) ─────────────────────────────────────
   const focusAreaRef    = useRef<PixelArea | null>(null);
   const searchParams    = useSearchParams();
   const focusAreaId     = searchParams.get("area");
@@ -206,10 +206,10 @@ export function LiveCanvas() {
       ctx.stroke();
 
     
-  }, [areas]); // ← csak areas! zoom és offset ref-ből jön
-  // draw ref szinkronizáció — mindig a legfrissebb draw-t tartalmazza
+  }, [areas]); // ← only areas! zoom and offset come from refs
+  // draw ref synchronization — always contains the latest draw
   useEffect(() => { drawRef.current = draw; }, [draw]);
-  // ── 4. Ref szinkronizáció + draw trigger ──────────────────────────────
+  // ── 4. Ref synchronization + draw trigger ──────────────────────────────
   useEffect(() => { zoomRef.current = zoom; drawRef.current(); }, [zoom, draw]);
   useEffect(() => { offsetRef.current = offset; drawRef.current(); }, [offset, draw]);
 
@@ -247,14 +247,14 @@ export function LiveCanvas() {
 useEffect(() => {
   if (!focusAreaId) return;
 
-  // Várjuk meg amíg az areas betölt, de NE legyen dependency
+  // Wait until areas load, but DO NOT make it a dependency
   const tryFocus = () => {
     if (hasZoomedRef.current) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    // areas-t közvetlenül olvassuk a setAreas ref-en keresztül — nem kell dependency
-    // Helyette: polingolunk amíg megérkezik
+    // We read areas directly via the setAreas ref — no dependency needed
+    // Instead: we poll until it arrives
     const area = areasRef.current.find((a: PixelArea) => a.id === focusAreaId);
     if (!area) return;
 
@@ -298,7 +298,7 @@ useEffect(() => {
     );
   };
 
-  // Pollingolunk 100ms-enként amíg az area megérkezik (max 10mp)
+  // We poll every 100ms until the area arrives (max 10s)
   let attempts = 0;
   const poll = setInterval(() => {
     attempts++;
@@ -327,7 +327,7 @@ useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    // A canvas max 800px széles (asztali), mobilon a rendelkezésre álló szélességre szűkül
+    // The canvas is max 800px wide (desktop); on mobile it shrinks to the available width
     const newW = Math.floor(availW);
 const newH = Math.round(newW / WORLD_RATIO);
 
@@ -352,7 +352,7 @@ const newH = Math.round(newW / WORLD_RATIO);
     e.preventDefault();
 
     const rect   = canvas.getBoundingClientRect();
-    // Canvas-koordinátára konvertálás
+    // Convert to canvas coordinates
     const mouseX = (e.clientX - rect.left) * (canvas.width  / rect.width);
     const mouseY = (e.clientY - rect.top)  * (canvas.height / rect.height);
 
@@ -366,7 +366,7 @@ const newH = Math.round(newW / WORLD_RATIO);
 
     const clamped = clampOffset(rawX, rawY, newZ, canvas.width, canvas.height);
 
-    // Refek azonnali frissítése — draw() már az új értékeket látja
+    // Immediate ref updates — draw() already sees the new values
     zoomRef.current   = newZ;
     offsetRef.current = clamped;
 
@@ -377,7 +377,7 @@ const newH = Math.round(newW / WORLD_RATIO);
 
   canvas.addEventListener("wheel", onWheel, { passive: false });
   return () => canvas.removeEventListener("wheel", onWheel);
-}, []); // deps üres — ref-eken keresztül mindig friss értéket lát
+}, []); // deps empty — refs always provide fresh values
 
   // ── 9. Mouse events ────────────────────────────────────────────────────
   const onMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
