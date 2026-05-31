@@ -39,6 +39,24 @@ const FAQS = [
     a: "JPG, PNG, GIF, and WebP are all supported. Maximum file size is 10 MB. GIF animations are rendered live on the canvas.",
   },
   {
+  q: "What content is prohibited on the canvas?",
+  a: `The following content is strictly prohibited:
+
+    • Pornographic or sexually explicit material
+    • Symbols or imagery associated with totalitarian, fascist, or nazi regimes
+    • Racist, hateful, or discriminatory content of any kind
+    • Content that promotes violence or terrorism
+    • Any material that violates applicable laws or regulations
+
+Violations are handled progressively:
+
+1st offense — Content is removed. Your pixel quota is restored and the area becomes available to reclaim.
+2nd offense — Content is removed. Your pixel quota is forfeited for that area. Your tokens remain in your wallet.
+3rd offense — Content is removed and your wallet address is permanently banned from the platform.
+
+By claiming a pixel area, you agree that your uploaded content complies with these guidelines. The development team reserves the right to act on violations at any time without prior notice.`,
+},
+  {
     q: "Is the canvas permanent?",
     a: "As long as you hold enough tokens to cover your claimed area, your space is permanent. The only way your content is removed is if your token balance drops and is not restored before the next hourly sync.",
   },
@@ -133,6 +151,7 @@ export default function FAQPage() {
                   lineHeight: 1.85,
                   borderTop: "1px solid rgba(255,255,255,0.06)",
                   paddingTop: "1rem",
+                  whiteSpace: "pre-line"
                 }}>
                   {item.a}
                 </div>
@@ -185,6 +204,21 @@ export default function FAQPage() {
               }}
             >
               X (Twitter) →
+            </a>
+            <a
+              href="https://coincommunities.org/communities/"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                padding: "0.6rem 1.25rem", borderRadius: 10,
+                background: "rgba(44, 44, 44, 0.98)",
+                border: "1px solid rgba(161, 161, 161, 0.69)",
+                color: "#afafaf", fontSize: "0.82rem",
+                fontFamily: "monospace", textDecoration: "none",
+                fontWeight: 600,
+              }}
+            >
+              CoinCommunities →
             </a>
           </div>
         </div>
