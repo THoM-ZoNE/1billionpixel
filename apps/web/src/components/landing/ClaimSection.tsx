@@ -334,6 +334,24 @@ export function ClaimSection() {
     return [w, Math.round(w * ratio[1] / ratio[0])];
   };
 
+  const toWorldFromCoords = (clientX: number, clientY: number) => {
+  const canvas = canvasRef.current; if (!canvas) return null;
+  const rect = canvas.getBoundingClientRect();
+  const { x: tx, y: ty, scale } = vtRef.current;
+  const W = canvas.width, H = canvas.height;
+  const canvasX = (clientX - rect.left) * (W / rect.width);
+  const canvasY = (clientY - rect.top)  * (H / rect.height);
+  const worldSx = (W / WORLD_W) * scale;
+  const worldSy = (H / WORLD_H) * scale;
+  const { xEdges, yEdges } = getEdges();
+  let wx = Math.max(0, Math.min(Math.round((canvasX - tx) / worldSx), WORLD_W - 1));
+  let wy = Math.max(0, Math.min(Math.round((canvasY - ty) / worldSy), WORLD_H - 1));
+  wx = snapToNeighbors(wx, xEdges, NEIGHBOR_SNAP);
+  wy = snapToNeighbors(wy, yEdges, NEIGHBOR_SNAP);
+  if (!xEdges.some(ex => Math.abs(wx - ex) < 0.5)) wx = snapToGrid(wx);
+  if (!yEdges.some(ey => Math.abs(wy - ey) < 0.5)) wy = snapToGrid(wy);
+  return { wx, wy };
+};
   // ── Mouse handlers ────────────────────────────────────────────────────────
   const onMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (e.button === 1 || (e.button === 0 && spacePressedRef.current)) {
@@ -449,6 +467,113 @@ export function ClaimSection() {
     setSelection({ ...sel });
   };
 
+  // Touch handlers (basic implementation, can be improved with better multi-touch support)
+  const lastTouchDistRef = useRef(0);
+
+const onTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+  if (e.touches.length === 2) {
+    // Pinch zoom kezdete
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    lastTouchDistRef.current = Math.sqrt(dx * dx + dy * dy);
+    return;
+  }
+  if (e.touches.length !== 1) return;
+  const t = e.touches[0];
+  const pos = toWorldFromCoords(t.clientX, t.clientY);
+  if (!pos) return;
+  const sel = selectionRef.current ?? selection;
+
+  // Move selection
+  if (sel && pos.wx >= sel.x && pos.wx <= sel.x + sel.w && pos.wy >= sel.y && pos.wy <= sel.y + sel.h) {
+    isMoveRef.current     = true;
+    draggingRef.current   = true;
+    moveOffsetRef.current = { dx: pos.wx - sel.x, dy: pos.wy - sel.y };
+    return;
+  }
+
+  // Pan (two-finger or space — single touch defaults to draw)
+  // New selection
+  isMoveRef.current    = false;
+  dragStart.current    = { wx: pos.wx, wy: pos.wy };
+  draggingRef.current  = true;
+  selectionRef.current = null;
+  setSelection(null);
+};
+
+const onTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+  if (e.touches.length === 2) {
+    // Pinch zoom
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (lastTouchDistRef.current > 0) {
+      const canvas = canvasRef.current; if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      const factor = dist / lastTouchDistRef.current;
+      const midX = ((e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left) * (canvas.width / rect.width);
+      const midY = ((e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top)  * (canvas.height / rect.height);
+      const { x: px, y: py, scale: ps } = vtRef.current;
+      const newScale = Math.max(0.5, Math.min(20, ps * factor));
+      vtRef.current = {
+        x: midX - (midX - px) * (newScale / ps),
+        y: midY - (midY - py) * (newScale / ps),
+        scale: newScale,
+      };
+      setZoomDisplay(newScale);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => draw());
+    }
+    lastTouchDistRef.current = dist;
+    return;
+  }
+  if (e.touches.length !== 1 || !draggingRef.current) return;
+  const t = e.touches[0];
+  const pos = toWorldFromCoords(t.clientX, t.clientY);
+  if (!pos) return;
+
+  if (isMoveRef.current && moveOffsetRef.current) {
+    const sel = selectionRef.current ?? selection;
+    if (!sel) return;
+    const rawX = Math.max(0, Math.min(pos.wx - moveOffsetRef.current.dx, WORLD_W - sel.w));
+    const rawY = Math.max(0, Math.min(pos.wy - moveOffsetRef.current.dy, WORLD_H - sel.h));
+    selectionRef.current = snapPosition(rawX, rawY, sel.w, sel.h);
+  } else if (dragStart.current) {
+    let w = Math.abs(pos.wx - dragStart.current.wx) || 1;
+    let h = Math.abs(pos.wy - dragStart.current.wy) || 1;
+    [w, h] = applyRatio(w, h);
+    selectionRef.current = {
+      x: Math.min(dragStart.current.wx, pos.wx),
+      y: Math.min(dragStart.current.wy, pos.wy),
+      w, h,
+    };
+  }
+  if (rafRef.current) cancelAnimationFrame(rafRef.current);
+  rafRef.current = requestAnimationFrame(() => draw());
+};
+
+const onTouchEnd = (e: React.TouchEvent<HTMLCanvasElement>) => {
+  if (e.touches.length < 2) lastTouchDistRef.current = 0;
+  if (e.touches.length > 0) return;
+  draggingRef.current   = false;
+  isMoveRef.current     = false;
+  moveOffsetRef.current = null;
+  const sel = selectionRef.current;
+  if (!sel) return;
+  if (sel.w < MIN_PX || sel.h < MIN_PX) {
+    setValidationError(`Minimum selectable size: ${MIN_PX}×${MIN_PX} px`);
+    selectionRef.current = null; draw(); return;
+  }
+  if (!isRectInsideCapsule(sel.x, sel.y, sel.w, sel.h)) {
+    setValidationError("The selected area lies outside the capsule!");
+    selectionRef.current = null; draw(); return;
+  }
+  if (overlapsAnyArea(sel.x, sel.y, sel.w, sel.h)) {
+    setValidationError("The selected area overlaps an already claimed area!");
+    selectionRef.current = null; draw(); return;
+  }
+  setSelection({ ...sel });
+};
   // ── Computed ──────────────────────────────────────────────────────────────
   const pixelCount = selection ? selection.w * selection.h : 0;
   const canClaim   = pixelCount > 0 && pixelCount <= availableQuota
@@ -519,7 +644,7 @@ export function ClaimSection() {
       }}>
         <canvas
           ref={canvasRef}
-          style={{ display: "block", width: "100%", cursor: cursorStyle }}
+          style={{ display: "block", width: "100%", cursor: cursorStyle, touchAction: "none" }}
           onMouseDown={onMouseDown}
           onMouseMove={onMouseMove}
           onMouseUp={onMouseUp}
@@ -531,6 +656,9 @@ export function ClaimSection() {
             if (rafRef.current) cancelAnimationFrame(rafRef.current);
             rafRef.current = requestAnimationFrame(() => draw());
           }}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
         />
       </div>
 

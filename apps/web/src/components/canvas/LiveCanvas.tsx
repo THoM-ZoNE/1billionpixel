@@ -452,27 +452,66 @@ const newH = Math.round(newW / WORLD_RATIO);
 };
 
   // ── 10. Touch events ───────────────────────────────────────────────────
-  const onTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
-    if (e.touches.length !== 1) return;
+const lastTouchDistRef = useRef(0);
+
+const onTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+  if (e.touches.length === 1) {
     const touch = e.touches[0];
     isDragging.current = true;
+    dragMovedRef.current = false;
     dragStart.current = { mx: touch.clientX, my: touch.clientY, ox: offsetRef.current.x, oy: offsetRef.current.y };
-  };
+  } else if (e.touches.length === 2) {
+    isDragging.current = false;
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    lastTouchDistRef.current = Math.sqrt(dx * dx + dy * dy);
+  }
+};
 
-  const onTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
-    if (e.touches.length !== 1) return;
+const onTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+  const canvas = canvasRef.current; if (!canvas) return;
+  const rect = canvas.getBoundingClientRect();
+
+  if (e.touches.length === 2) {
+    // Pinch-to-zoom
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (lastTouchDistRef.current > 0) {
+      const scale = dist / lastTouchDistRef.current;
+      const oldZ = zoomRef.current;
+      const newZ = Math.min(20, Math.max(0.95, oldZ * scale));
+      // Zoom around the midpoint of the two fingers
+      const midX = ((e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left) * (canvas.width / rect.width);
+      const midY = ((e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top) * (canvas.height / rect.height);
+      const rawX = midX - (midX - offsetRef.current.x) * (newZ / oldZ);
+      const rawY = midY - (midY - offsetRef.current.y) * (newZ / oldZ);
+      const clamped = clampOffset(rawX, rawY, newZ, canvas.width, canvas.height);
+      zoomRef.current = newZ;
+      offsetRef.current = clamped;
+      setZoom(newZ);
+      setOffset(clamped);
+    }
+    lastTouchDistRef.current = dist;
+  } else if (e.touches.length === 1 && isDragging.current) {
+    // Pan
     const touch = e.touches[0];
-    const canvas = canvasRef.current; if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
+    dragMovedRef.current = true;
     const raw = {
       x: dragStart.current.ox + (touch.clientX - dragStart.current.mx) * (canvas.width / rect.width),
       y: dragStart.current.oy + (touch.clientY - dragStart.current.my) * (canvas.height / rect.height),
     };
-    setOffset(clampOffset(raw.x, raw.y, zoomRef.current, canvas.width, canvas.height));
+    const clamped = clampOffset(raw.x, raw.y, zoomRef.current, canvas.width, canvas.height);
+    offsetRef.current = clamped;
+    setOffset(clamped);
     setTooltip(null);
-  };
+  }
+};
 
-  const onTouchEnd = () => { isDragging.current = false; };
+const onTouchEnd = (e: React.TouchEvent<HTMLCanvasElement>) => {
+  if (e.touches.length < 2) lastTouchDistRef.current = 0;
+  if (e.touches.length === 0) isDragging.current = false;
+};
 
   // ── 11. GIF overlay position ────────────────────────────────────────────
     const getGifStyle = useCallback((area: PixelArea): React.CSSProperties => {
@@ -566,7 +605,7 @@ const stopZoom = () => {
 
   const zp = Math.round(zoom * 100);
   return (
-    <div style={{ minHeight: "100vh", background: "#060a06", display: "flex", flexDirection: "column" }}>
+    <div style={{ minHeight: "100dvh", background: "#060a06", overflow: "hidden", display: "flex", flexDirection: "column" }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1.5rem 1.5rem", borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(6,10,6,1)", position: "sticky", top: 0, zIndex: 100 }}>
         <a href="/" style={{ fontFamily: "monospace", fontSize: "0.85rem", color: "#14f195", textDecoration: "none", letterSpacing: "0.15em" }}>{"← 1BP.FUN"}</a>
@@ -778,10 +817,23 @@ const stopZoom = () => {
 </div>
     </div>
   </div>
+  
 )}
+</div>
 
         {/* Zoom controls */}
-        <div style={{ position: "absolute", bottom: 16, left: "50%", transform: "translateX(-50%)", display: "flex", gap: "0.5rem", alignItems: "center", background: "rgba(6,10,6,0.85)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 8, padding: "0.4rem 0.9rem" }}>
+        <div style={{
+  position: "fixed",
+  bottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)",
+  left: "50%",
+  transform: "translateX(-50%)",
+  display: "flex", gap: "0.5rem", alignItems: "center",
+  background: "rgba(6,10,6,0.85)",
+  border: "1px solid rgba(255,255,255,0.07)",
+  borderRadius: 8,
+  padding: "0.4rem 0.9rem",
+  zIndex: 200,
+}}>
           <button
   onMouseDown={() => startZoom(-1)}
   onMouseUp={stopZoom}
@@ -798,7 +850,6 @@ const stopZoom = () => {
           <span style={{ width: 1, height: 16, background: "rgba(255,255,255,0.1)", margin: "0 4px" }}></span>
           <button onClick={() => { setZoom(1); setOffset({ x: 0, y: 0 }); }} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.35)", fontSize: "0.65rem", fontFamily: "monospace", cursor: "pointer", letterSpacing: "0.05em" }}>RESET</button>
         </div>
-      </div>
-    </div>
+   </div>
   );
 }

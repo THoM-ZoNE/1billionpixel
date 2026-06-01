@@ -31,6 +31,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           name="description"
           content="Buy $1BPX tokens on Pump.fun and claim your pixel canvas territory forever."
         />
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"></meta>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
           href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap"
