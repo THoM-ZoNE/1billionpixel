@@ -1,6 +1,6 @@
 // apps/api/src/routes/admin.ts
 import { FastifyPluginAsync } from "fastify";
-import { prisma } from "../db";
+import { prisma } from "@1bp/database";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 

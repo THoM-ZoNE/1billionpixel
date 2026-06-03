@@ -1,7 +1,7 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import nacl from "tweetnacl";
 import bs58 from "bs58";
-import { prisma } from "src/db";
+import { prisma } from "@1bp/database";
 
 export async function verifyWalletSignature(
   req: FastifyRequest,
