@@ -211,7 +211,83 @@ protectedApp.delete("/forbidden", async () => {
 
   return { deleted: forbiddenAreas.length };
 });
+protectedApp.post<{
+  Body: { areaId: string; action: "warn" | "punish" | "ban" }
+}>(
+  "/moderate",
+  async (req, reply) => {
+    const { areaId, action } = req.body;
 
+    const area = await prisma.pixelArea.findUnique({
+      where: { id: areaId },
+      include: { wallet: true },
+    });
+    if (!area) return reply.status(404).send({ error: "Area not found" });
+
+    const pixelCount = area.pixelCount;
+
+    if (action === "warn") {
+      // 1. alkalom: kép törölve, quota visszakapja
+      await prisma.$transaction([
+        prisma.pixelArea.delete({ where: { id: areaId } }),
+        prisma.wallet.update({
+          where: { address: area.walletAddress },
+          data: {
+            lockedPixels:   { decrement: pixelCount },
+            availableQuota: { increment: pixelCount },
+            violationCount: { increment: 1 },
+          },
+        }),
+      ]);
+      return { ok: true, action: "warn", message: "Image removed, quota restored, violation +1" };
+    }
+
+    if (action === "punish") {
+      // 2. alkalom: kép törölve, quota elvész
+      await prisma.$transaction([
+        prisma.pixelArea.delete({ where: { id: areaId } }),
+        prisma.wallet.update({
+          where: { address: area.walletAddress },
+          data: {
+            lockedPixels:   { decrement: pixelCount },
+            // availableQuota NEM nő vissza → quota elveszik
+            violationCount: { increment: 1 },
+          },
+        }),
+      ]);
+      return { ok: true, action: "punish", message: "Image removed, quota lost, violation +1" };
+    }
+
+    if (action === "ban") {
+      // 3. alkalom: kép törölve, quota elvész, wallet bannolva
+      await prisma.$transaction([
+        prisma.pixelArea.delete({ where: { id: areaId } }),
+        prisma.wallet.update({
+          where: { address: area.walletAddress },
+          data: {
+            lockedPixels:   { decrement: pixelCount },
+            violationCount: { increment: 1 },
+            bannedAt:       new Date(),
+          },
+        }),
+      ]);
+      return { ok: true, action: "ban", message: "Image removed, quota lost, wallet banned" };
+    }
+
+    return reply.status(400).send({ error: "Invalid action. Use: warn | punish | ban" });
+  }
+);
+
+// POST /admin/wallets/:address/unban
+protectedApp.post<{ Params: { address: string } }>(
+  "/wallets/:address/unban",
+  async (req) => {
+    return prisma.wallet.update({
+      where: { address: req.params.address },
+      data: { bannedAt: null, violationCount: 0 },
+    });
+  }
+);
   });
 };
 

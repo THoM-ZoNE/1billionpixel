@@ -1,6 +1,6 @@
 import { FastifyPluginAsync } from "fastify";
 import { prisma }             from "@1bp/database";
-import { saveImageLocally } from "../services/storage.js";
+import { saveImageLocally }   from "../services/storage.js";
 import { resizeForArea }      from "../services/imageProcessor.js";
 import { verifySignature }    from "../lib/auth.js";
 import { broadcastCanvasUpdate } from "../lib/websocket.js";
@@ -8,23 +8,14 @@ import { ALLOWED_MIME_TYPES } from "@1bp/shared";
 
 const uploadRoutes: FastifyPluginAsync = async (app) => {
 
-  // POST /api/upload/:areaId  — upload image to a claimed area
   app.post<{ Params: { areaId: string } }>("/:areaId", async (req, reply) => {
+
+    // ── 1. Multipart mezők kiolvasása ────────────────────────────────────────
     const parts = req.parts();
     let file: any = null;
     let walletAddress = "";
     let signature = "";
     let message = "";
-
-    // skipSignature check
-  const wallet = await prisma.wallet.findUnique({ where: { address: walletAddress } });
-  if (!wallet?.skipSignature) {
-    if (!signature || !message) {
-      return reply.status(401).send({ error: "Signature required" });
-    }
-    const valid = verifySignature(walletAddress, message, signature);
-    if (!valid) return reply.status(401).send({ error: "Invalid signature" });
-  }
 
     for await (const part of parts) {
       if (part.type === "file") {
@@ -36,37 +27,55 @@ const uploadRoutes: FastifyPluginAsync = async (app) => {
       }
     }
 
-    if (!file) return reply.status(400).send({ error: "No file provided" });
+    // ── 2. Alapellenőrzések ──────────────────────────────────────────────────
+    if (!file)          return reply.status(400).send({ error: "No file provided" });
+    if (!walletAddress) return reply.status(400).send({ error: "walletAddress required" });
 
-    // 1. Auth
-    const valid = verifySignature(walletAddress, message, signature);
-    if (!valid) return reply.status(401).send({ error: "Invalid signature" });
+    // ── 3. Wallet lekérés (itt már van walletAddress!) ───────────────────────
+    const wallet = await prisma.wallet.findUnique({ where: { address: walletAddress } });
+    if (!wallet) return reply.status(403).send({ error: "Wallet not found" });
 
-    // 2. MIME check
+    // ── 4. Ban check ─────────────────────────────────────────────────────────
+    if (wallet.bannedAt) {
+      return reply.status(403).send({ error: "Wallet is banned from uploading." });
+    }
+
+    // ── 5. Signature check (csak ha nincs skipSignature) ─────────────────────
+    if (!wallet.skipSignature) {
+      if (!signature || !message) {
+        return reply.status(401).send({ error: "Signature required" });
+      }
+      const valid = verifySignature(walletAddress, message, signature);
+      if (!valid) return reply.status(401).send({ error: "Invalid signature" });
+    }
+
+    // ── 6. MIME check ────────────────────────────────────────────────────────
     if (!ALLOWED_MIME_TYPES.includes(file.mimetype))
       return reply.status(400).send({ error: "File type not allowed. Use JPG, PNG or GIF." });
 
-    // 3. Load area
+    // ── 7. Area ellenőrzés ───────────────────────────────────────────────────
     const area = await prisma.pixelArea.findUnique({ where: { id: req.params.areaId } });
     if (!area || area.walletAddress !== walletAddress)
       return reply.status(404).send({ error: "Area not found" });
 
-    // 4. Read & resize image
+    // ── 8. Resize + WebP optimalizáció ───────────────────────────────────────
     const buffer    = await file.toBuffer();
     const processed = await resizeForArea(buffer, file.mimetype, area.width, area.height);
 
-    // 5. Upload to R2
-    const { url: imageUrl, key, type } = await saveImageLocally(processed, file.mimetype);
+    // ── 9. Mentés ────────────────────────────────────────────────────────────
+    const { url: imageUrl, key } = await saveImageLocally(processed.buffer, processed.ext);
 
-    // 6. Update DB
+    // ── 10. DB frissítés ─────────────────────────────────────────────────────
     await prisma.pixelArea.update({
       where: { id: area.id },
-      data:  { imageUrl, imageKey: key, imageType: file.mimetype.split("/")[1] },
+      data:  { imageUrl, imageKey: key, imageType: processed.ext },
     });
 
-    // 7. WebSocket broadcast
-    broadcastCanvasUpdate({ type: "IMAGE_UPLOADED", areaId: area.id, imageUrl,
-      x: area.x, y: area.y, width: area.width, height: area.height });
+    // ── 11. WebSocket broadcast ──────────────────────────────────────────────
+    broadcastCanvasUpdate({
+      type: "IMAGE_UPLOADED", areaId: area.id, imageUrl,
+      x: area.x, y: area.y, width: area.width, height: area.height,
+    });
 
     return reply.send({ ok: true, imageUrl });
   });

@@ -8,6 +8,8 @@ type WalletRow = {
   address: string;
   totalQuota: number;
   skipSignature: boolean;
+  violationCount: number;   
+  bannedAt: string | null;
   areas: {
     id: string;
     x: number;
@@ -112,6 +114,37 @@ function WalletTable({
     onRefresh();
   };
 
+const moderateArea = async (areaId: string, walletAddress: string, violationCount: number) => {
+  // Az action-t automatikusan a violationCount alapján ajánljuk, de admin dönt
+  const suggestedAction = violationCount === 0 ? "warn" : violationCount === 1 ? "punish" : "ban";
+  const action = window.prompt(
+    `Moderation action for this area:\n` +
+    `Wallet violations so far: ${violationCount}\n\n` +
+    `Options: warn (quota back) | punish (quota lost) | ban (wallet banned)\n` +
+    `Suggested: ${suggestedAction}`,
+    suggestedAction
+  );
+  if (!action || !["warn", "punish", "ban"].includes(action)) return;
+
+  const res = await fetch(`/api/admin/moderate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ areaId, action }),
+  });
+  const data = await res.json();
+  alert(data.message ?? data.error);
+  onRefresh();
+};
+
+const unbanWallet = async (address: string) => {
+  if (!confirm(`Unban wallet ${address.slice(0, 8)}...?`)) return;
+  await fetch(`/api/admin/wallets/${encodeURIComponent(address)}/unban`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  onRefresh();
+};
+
   const updateQuota = async (address: string, quota: number) => {
     await fetch(
       `/api/admin/wallets/${encodeURIComponent(address)}/quota`,
@@ -136,6 +169,8 @@ function WalletTable({
           <th style={{ padding: "6px 8px" }}>Skip Sign</th>
           <th style={{ padding: "6px 8px" }}>Areas</th>
           <th style={{ padding: "6px 8px" }}>Set quota</th>
+          <th style={{ padding: "6px 8px" }}>Violations</th>
+          <th style={{ padding: "6px 8px" }}>Ban</th>
         </tr>
       </thead>
       <tbody>
@@ -206,6 +241,31 @@ function WalletTable({
                   current={w.totalQuota}
                   onSave={updateQuota}
                 />
+              </td>
+              {/* Violations */}
+              <td style={{ textAlign: "center", padding: "6px 8px" }}>
+                <span style={{
+                  color: w.violationCount === 0 ? "#666" : w.violationCount === 1 ? "#f59e0b" : "#f87171",
+                  fontWeight: "bold"
+                }}>
+                  {w.violationCount}x
+                </span>
+              </td>
+
+              {/* Ban status */}
+              <td style={{ textAlign: "center", padding: "6px 8px" }}>
+                {w.bannedAt ? (
+                  <button
+                    onClick={() => unbanWallet(w.address)}
+                    title="Click to unban"
+                    style={{ padding: "2px 8px", background: "#7f1d1d", color: "#fca5a5",
+                            border: "none", borderRadius: 4, cursor: "pointer", fontSize: 11 }}
+                  >
+                    🚫 Banned
+                  </button>
+                ) : (
+                  <span style={{ color: "#444", fontSize: 11 }}>—</span>
+                )}
               </td>
             </tr>
 
@@ -280,6 +340,21 @@ function WalletTable({
                           >
                             🗑️
                           </button>
+                          <button
+                          onClick={() => moderateArea(area.id, w.address, w.violationCount)}
+                          title="Moderate (remove image + sanction)"
+                          style={{
+                            background: "#78350f",
+                            border: "none",
+                            borderRadius: 4,
+                            color: "#fcd34d",
+                            cursor: "pointer",
+                            padding: "4px 8px",
+                            fontSize: 12,
+                          }}
+                        >
+                          ⚠️
+                        </button>
                         </div>
                       ))}
                     </div>

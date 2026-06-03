@@ -7,7 +7,6 @@ const nextConfig = {
     ],
   },
   serverExternalPackages: ['sharp'],
-  allowedDevOrigins: ['yeast-kirk-flux-spokesman.trycloudflare.com'],
   async rewrites() {
     return [
       {
