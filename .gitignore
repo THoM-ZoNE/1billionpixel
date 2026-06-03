@@ -17,6 +17,7 @@ out/
 
 # Prisma generated
 prisma/generated/
+prisma/migrations/
 
 # Logs
 *.log

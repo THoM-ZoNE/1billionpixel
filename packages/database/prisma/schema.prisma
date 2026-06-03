@@ -20,6 +20,8 @@ model Wallet {
   areas            PixelArea[]
   transactions     TokenEvent[]
   skipSignature    Boolean       @default(false)
+  violationCount   Int           @default(0)
+  bannedAt         DateTime?
 
   @@map("wallets")
 }

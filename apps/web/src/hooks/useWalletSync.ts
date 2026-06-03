@@ -1,17 +1,28 @@
 import { useEffect, useState } from "react";
-import { useWallet }           from "@solana/wallet-adapter-react";
-import { useWalletStore }      from "@/store/walletStore";
-import { api }                 from "@/lib/api";
-import { signAuthMessage }     from "@/lib/signMessage";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { useWalletStore } from "@/store/walletStore";
+import { api } from "@/lib/api";
+import { signAuthMessage } from "@/lib/signMessage";
 
 export const useWalletSync = () => {
   const wallet = useWallet();
   const { fetchWallet, clearWallet } = useWalletStore();
   const [error, setError] = useState<string | null>(null);
 
+  // Wallet connect / disconnect esetén
   useEffect(() => {
     if (!wallet.publicKey) { clearWallet(); return; }
     fetchWallet(wallet.publicKey.toBase58());
+  }, [wallet.publicKey]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible" && wallet.publicKey) {
+        fetchWallet(wallet.publicKey.toBase58());
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
   }, [wallet.publicKey]);
 
   const connectAndVerify = async () => {
