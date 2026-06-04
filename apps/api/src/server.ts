@@ -1,5 +1,5 @@
 import "dotenv/config";
-import Fastify from "fastify";
+import Fastify, { fastify } from "fastify";
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import rateLimit from "@fastify/rate-limit";
@@ -15,6 +15,7 @@ import { webhookRoutes } from "./routes/webhook.js";
 import { startCronJobs } from "./jobs/cron.js";
 import adminRoutes from "./routes/admin";
 import path from "path";
+import { runQuotaEnforcer } from "./jobs/quotaEnforcer.js";
 
 async function main() {
   // BigInt -> string global serialization
@@ -40,13 +41,28 @@ async function main() {
 
   startCronJobs();
 
-  app.listen({ port: 4000, host: "0.0.0.0" }, (err) => {
+    app.listen({ port: 4000, host: "0.0.0.0" }, (err) => {
     if (err) {
       app.log.error(err);
       process.exit(1);
     }
     console.log("🚀 API running on http://localhost:4000");
   });
+
+  // Cron — app.log, nem fastify.log ✅
+  const CRON_INTERVAL_MS = Number(process.env.QUOTA_CHECK_INTERVAL_MS ?? 60 * 60 * 1000);
+
+  setInterval(() => {
+    runQuotaEnforcer().catch(err =>
+      app.log.error({ err }, "QuotaEnforcer failed")
+    );
+  }, CRON_INTERVAL_MS);
+
+  setTimeout(() => {
+    runQuotaEnforcer().catch(err =>
+      app.log.error({ err }, "QuotaEnforcer initial run failed")
+    );
+  }, 30_000);
 }
 
 main().catch((err) => {
@@ -54,6 +70,7 @@ main().catch((err) => {
   process.exit(1);
 });
 
+// ✅ Ez marad (csak egyszer, a main() után)
 (BigInt.prototype as any).toJSON = function () {
   return this.toString();
 };

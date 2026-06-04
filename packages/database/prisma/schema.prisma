@@ -22,6 +22,8 @@ model Wallet {
   skipSignature    Boolean       @default(false)
   violationCount   Int           @default(0)
   bannedAt         DateTime?
+  telegramHandle   String?
+  atRiskSince      DateTime?
 
   @@map("wallets")
 }

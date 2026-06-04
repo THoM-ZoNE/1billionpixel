@@ -32,6 +32,7 @@ export function ClaimModal({ region, availableQuota, onClose, onSuccess, onImage
   const cantProceed = overQuota || !imageFile;
   const [claimedAreaId, setClaimedAreaId] = useState<string | null>(null);
   const [copied,        setCopied]        = useState(false);
+  const [telegramHandle, setTelegramHandle] = useState("");
 
   const applyFile = (file: File) => {
     if (!file.type.startsWith("image/")) {
@@ -88,6 +89,7 @@ export function ClaimModal({ region, availableQuota, onClose, onSuccess, onImage
       formData.append("height", String(region.height));
       if (link.trim()) formData.append("link", link.trim());
       if (imageFile)   formData.append("image", imageFile);
+      if (telegramHandle.trim()) formData.append("telegramHandle", telegramHandle.trim());
 
       // If wallet skipSignature=true, middleware allows request without signature
       let headers: Record<string, string> = {
@@ -108,7 +110,7 @@ export function ClaimModal({ region, availableQuota, onClose, onSuccess, onImage
           // User rejected signing — can proceed if skipSignature is enabled
         }
       }
-
+      
       // Direct backend call (not via Next.js proxy)
       const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
       const res = await fetch(`${apiBase}/canvas/claim`, {
@@ -434,6 +436,29 @@ const renderError = () => error ? (
           onChange={e => setLink(e.target.value)}
           style={inputStyle}
         />
+      </div>
+      {/* Telegram handle */}
+      <div>
+        <label style={labelStyle}>
+          Telegram <span style={{ color: "rgba(255,255,255,0.2)" }}>(optional — for quota alerts)</span>
+        </label>
+        <input
+          type="text"
+          placeholder="@yourusername"
+          value={telegramHandle}
+          onChange={e => setTelegramHandle(e.target.value)}
+          style={inputStyle}
+        />
+        <p style={{ color: "rgba(255,255,255,0.25)", fontSize: "0.68rem", 
+                    fontFamily: "monospace", margin: "0.35rem 0 0" }}>
+          Start a chat with{" "}
+          <a href="https://t.me/OneBillionPixelBot" target="_blank" 
+            rel="noopener noreferrer"
+            style={{ color: "rgba(20,241,149,0.6)", textDecoration: "none" }}>
+            @OneBillionPixelBot
+          </a>{" "}
+          first, then add your handle to receive low-balance alerts.
+        </p>
       </div>
 
       {renderError()}
