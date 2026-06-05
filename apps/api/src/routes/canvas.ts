@@ -3,6 +3,7 @@ import { getCanvasAreas, getCanvasStats, claimArea } from "../services/canvas.js
 import { verifyWalletSignature } from "../middleware/walletAuth.js";
 import { saveImageLocally } from "../services/storage.js";
 import { prisma } from "@1bp/database";
+import { sendNewClaimToGroup } from "../services/telegram.js";
 
 // Segédfüggvény: mime → ext union type
 function mimeToExt(mime: string): "webp" | "gif" | "jpg" | "png" {
@@ -120,7 +121,15 @@ const canvasRoutes: FastifyPluginAsync = async (app) => {
             },
           });
         }
-
+        void sendNewClaimToGroup({
+        walletAddress,
+        x: area.x,
+        y: area.y,
+        width:  area.width,
+        height: area.height,
+        imageUrl: area.imageUrl ?? undefined,
+        link: fields.link ?? undefined,
+      });
         return reply.status(201).send({
           success: true,
           area: {

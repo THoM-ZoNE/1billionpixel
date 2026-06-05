@@ -1,24 +1,27 @@
 import { prisma } from "@1bp/database";
 import { getOnChainBalance } from "../services/solana.js";
-import { sendTelegramMessage } from "../services/telegram.js";
 import { scaleAreaProportionally } from "../services/imageScaler.js";
+import {
+  sendQuotaWarning,
+  sendResizeNotification,
+  sendQuotaRestoredNotification,
+} from "../services/telegram.js";
 
-const GRACE_HOURS = Number(process.env.QUOTA_GRACE_HOURS ?? 1); // 1 óra alapértelmezett
+const GRACE_HOURS = Number(process.env.QUOTA_GRACE_HOURS ?? 1);
 
 export async function runQuotaEnforcer(): Promise<void> {
   console.log("[QuotaEnforcer] Starting run...");
 
-  // Összes wallet lekérése területekkel együtt
   const wallets = await prisma.wallet.findMany({
     where: {
       manualOverride: false,
       bannedAt: null,
-      lockedPixels: { gt: 0 }, // csak akiknek van foglalt területük
+      lockedPixels: { gt: 0 },
     },
     include: {
       areas: {
         where: { status: { in: ["ACTIVE", "AT_RISK"] } },
-        orderBy: { claimedAt: "asc" }, // régebbi területeket csökkentjük először
+        orderBy: { claimedAt: "asc" },
       },
     },
   });
@@ -38,17 +41,27 @@ export async function runQuotaEnforcer(): Promise<void> {
           where: { walletAddress: wallet.address, status: "AT_RISK" },
           data: { status: "ACTIVE" },
         });
+
+        // ✅ Új függvény: restored értesítés
+        if (wallet.telegramHandle) {
+          await sendQuotaRestoredNotification(
+            wallet.telegramHandle,
+            wallet.address,
+            onChain
+          );
+        }
+
         console.log(`[QuotaEnforcer] ${wallet.address.slice(0,8)}... restored to ACTIVE`);
       }
       continue;
     }
 
-    // ⚠️ Deficit: onChain < locked
+    // ⚠️ Deficit
     const deficit = locked - onChain;
     console.log(`[QuotaEnforcer] ${wallet.address.slice(0,8)}... deficit: ${deficit} px`);
 
     if (!wallet.atRiskSince) {
-      // 1. futás: AT_RISK jelölés + Telegram értesítés
+      // 1. futás: AT_RISK jelölés + warning értesítés
       await prisma.wallet.update({
         where: { address: wallet.address },
         data: { atRiskSince: new Date() },
@@ -58,44 +71,39 @@ export async function runQuotaEnforcer(): Promise<void> {
         data: { status: "AT_RISK" },
       });
 
+      // ✅ Új függvény: quota warning
       if (wallet.telegramHandle) {
-        const msg =
-          `⚠️ <b>1BillionPixel — Quota Warning</b>\n\n` +
-          `Your wallet <code>${wallet.address.slice(0, 8)}...${wallet.address.slice(-4)}</code> ` +
-          `holds <b>${onChain.toLocaleString()} $1BPX</b> tokens, but has ` +
-          `<b>${locked.toLocaleString()} pixels</b> claimed.\n\n` +
-          `You need to buy back <b>${deficit.toLocaleString()} $1BPX</b> within ` +
-          `<b>${GRACE_HOURS} hour${GRACE_HOURS > 1 ? "s" : ""}</b> to keep all your areas.\n\n` +
-          `If you don't top up in time, your claimed areas will be proportionally reduced.\n\n` +
-          `👉 <a href="https://pump.fun">Buy $1BPX on PumpFun</a>`;
-
-        await sendTelegramMessage(wallet.telegramHandle, msg);
+        await sendQuotaWarning(
+          wallet.telegramHandle,
+          wallet.address,
+          onChain,
+          locked,
+          deficit,
+          GRACE_HOURS
+        );
       }
 
       console.log(`[QuotaEnforcer] ${wallet.address.slice(0,8)}... marked AT_RISK, notification sent`);
       continue;
     }
 
-    // 2. futás: türelmi idő lejárt → arányos csökkentés
+    // 2. futás: türelmi idő lejárt?
     const gracePeriodMs = GRACE_HOURS * 60 * 60 * 1000;
     const elapsed = Date.now() - wallet.atRiskSince.getTime();
 
     if (elapsed < gracePeriodMs) {
-      console.log(`[QuotaEnforcer] ${wallet.address.slice(0,8)}... still in grace period (${Math.round(elapsed/60000)}min elapsed)`);
+      console.log(`[QuotaEnforcer] ${wallet.address.slice(0,8)}... still in grace period (${Math.round(elapsed / 60000)}min elapsed)`);
       continue;
     }
 
     // Grace lejárt → arányos területcsökkentés
     console.log(`[QuotaEnforcer] ${wallet.address.slice(0,8)}... grace expired, scaling areas...`);
 
-    // Elosztjuk az elérhető pixeleket az areák között arányosan
-    // (régebbi areák kicsit több pixelt kapnak, ha nem osztható egyenletesen)
-    const totalAllowed = onChain; // mennyi pixel összesen engedélyezett
+    const totalAllowed = onChain;
     let remainingAllowed = totalAllowed;
 
     for (const area of wallet.areas) {
       if (remainingAllowed <= 0n) {
-        // Nincs több engedélyezett pixel → terület törlése
         await prisma.pixelArea.update({
           where: { id: area.id },
           data: { status: "RELEASED" },
@@ -114,7 +122,7 @@ export async function runQuotaEnforcer(): Promise<void> {
       remainingAllowed -= allowedForArea < areaPixels ? allowedForArea : areaPixels;
     }
 
-    // AT_RISK törlése, területek visszaállítása ACTIVE-ra
+    // AT_RISK reset
     await prisma.wallet.update({
       where: { address: wallet.address },
       data: { atRiskSince: null },
@@ -124,15 +132,13 @@ export async function runQuotaEnforcer(): Promise<void> {
       data: { status: "ACTIVE" },
     });
 
-    // Telegram értesítés a csökkentésről
+    // ✅ Új függvény: resize értesítés
     if (wallet.telegramHandle) {
-      const msg =
-        `📉 <b>1BillionPixel — Areas Resized</b>\n\n` +
-        `Your claimed areas have been proportionally reduced to match your current ` +
-        `<b>${onChain.toLocaleString()} $1BPX</b> token balance.\n\n` +
-        `To restore your original areas, buy back the tokens and re-claim.\n\n` +
-        `👉 <a href="https://pump.fun">Buy $1BPX on PumpFun</a>`;
-      await sendTelegramMessage(wallet.telegramHandle, msg);
+      await sendResizeNotification(
+        wallet.telegramHandle,
+        wallet.address,
+        onChain
+      );
     }
   }
 
