@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { CanvasRegion } from "@1bp/shared";
 import { useWalletStore } from "@/store/walletStore";
 import bs58 from "bs58";
+import { TelegramInput } from "./TelegramInput";
 
 
 interface ClaimModalProps {
@@ -438,28 +439,34 @@ const renderError = () => error ? (
         />
       </div>
       {/* Telegram handle */}
-      <div>
-        <label style={labelStyle}>
-          Telegram <span style={{ color: "rgba(255,255,255,0.2)" }}>(optional — for quota alerts)</span>
-        </label>
-        <input
-          type="text"
-          placeholder="@yourusername"
-          value={telegramHandle}
-          onChange={e => setTelegramHandle(e.target.value)}
-          style={inputStyle}
-        />
-        <p style={{ color: "rgba(255,255,255,0.25)", fontSize: "0.68rem", 
-                    fontFamily: "monospace", margin: "0.35rem 0 0" }}>
-          Start a chat with{" "}
-          <a href="https://t.me/OneBillionPixelBot" target="_blank" 
-            rel="noopener noreferrer"
-            style={{ color: "rgba(20,241,149,0.6)", textDecoration: "none" }}>
-            @OneBillionPixelBot
-          </a>{" "}
-          first, then add your handle to receive low-balance alerts.
-        </p>
-      </div>
+<div>
+  <label style={labelStyle}>
+    Telegram <span style={{ color: "rgba(255,255,255,0.2)" }}>(optional — for quota alerts)</span>
+  </label>
+  <input
+    type="text"
+    placeholder="@yourusername"
+    value={telegramHandle}
+    onChange={e => setTelegramHandle(e.target.value)}
+    style={inputStyle}
+  />
+  <p style={{ color: "rgba(255,255,255,0.25)", fontSize: "0.68rem", 
+    fontFamily: "monospace", margin: "0.35rem 0 0" }}>
+    Start a chat with{" "}
+    <a href="https://t.me/OneBillionPixelBot" target="_blank" 
+      rel="noopener noreferrer"
+      style={{ color: "rgba(20,241,149,0.6)", textDecoration: "none" }}>
+      @OneBillionPixelBot
+    </a>{" "}
+    first, then add your handle to receive low-balance alerts.
+  </p>
+</div>
+{/* Telegram handle — verified */}
+<TelegramInput
+  value={telegramHandle}
+  onChange={setTelegramHandle}
+  accentColor="#14f195"
+/>
 
       {renderError()}
 

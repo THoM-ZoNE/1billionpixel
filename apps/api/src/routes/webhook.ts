@@ -1,6 +1,8 @@
 import { FastifyPluginAsync } from "fastify";
 import { syncWalletBalance }  from "../services/solana.js";
 import { checkGracePeriods }  from "../jobs/gracePeriod.js";
+import { prisma } from "@1bp/database";
+
 
 const webhookRoutes: FastifyPluginAsync = async (app) => {
 
