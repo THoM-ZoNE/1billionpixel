@@ -96,3 +96,9 @@ model AdminUser {
   passwordHash String
   createdAt    DateTime @default(now())
 }
+
+model TelegramVerification {
+  handle     String   @id  // "thomzone" (@ nélkül, lowercase)
+  chatId     String        // Telegram chat ID (DM küldéshez)
+  verifiedAt DateTime
+}

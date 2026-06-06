@@ -1,6 +1,8 @@
 -- CreateEnum
-CREATE TYPE "AreaStatus" AS ENUM ('ACTIVE', 'AT_RISK', 'RELEASED', 'FORBIDDEN');
-
+DO $$ BEGIN
+  CREATE TYPE "AreaStatus" AS ENUM ('ACTIVE', 'AT_RISK', 'RELEASED', 'PENDING');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 -- CreateEnum
 CREATE TYPE "EventType" AS ENUM ('BUY', 'SELL', 'TRANSFER_IN', 'TRANSFER_OUT');
 

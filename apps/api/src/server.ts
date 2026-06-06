@@ -16,6 +16,7 @@ import { startCronJobs } from "./jobs/cron.js";
 import adminRoutes from "./routes/admin";
 import path from "path";
 import { runQuotaEnforcer } from "./jobs/quotaEnforcer.js";
+import { telegramRoutes } from "./routes/telegram.js";
 
 async function main() {
   // BigInt -> string global serialization
@@ -38,6 +39,7 @@ async function main() {
   app.register(wsRoutes);
   app.register(fastifyStatic, {root: path.join(process.cwd(), "uploads"),prefix: "/uploads/",});
   app.register(adminRoutes, { prefix: "/api/admin" });
+  app.register(telegramRoutes, { prefix: "/api/telegram" });
 
   startCronJobs();
 
