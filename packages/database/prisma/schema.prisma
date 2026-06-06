@@ -24,6 +24,7 @@ model Wallet {
   bannedAt         DateTime?
   telegramHandle   String?
   atRiskSince      DateTime?
+  lastResizedAt    DateTime?
 
   @@map("wallets")
 }

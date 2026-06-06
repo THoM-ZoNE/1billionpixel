@@ -32,18 +32,20 @@ const webhookRoutes: FastifyPluginAsync = async (app) => {
   const update = req.body as any;
   const msg    = update?.message;
 
-  if (msg?.text === "/start" && msg.from?.username) {
+  if (
+    msg?.text === "/start" &&
+    msg.from?.username &&
+    msg.chat?.type === "private"   // ← ÚJ: csak privát DM-ből fogadja el
+  ) {
     const handle = msg.from.username.toLowerCase();
     const chatId = String(msg.chat.id);
 
-    // Mentés DB-be
     await prisma.telegramVerification.upsert({
       where:  { handle },
       update: { chatId, verifiedAt: new Date() },
       create: { handle, chatId, verifiedAt: new Date() },
     });
 
-    // Welcome üzenet
     await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -62,8 +64,6 @@ const webhookRoutes: FastifyPluginAsync = async (app) => {
 
   return reply.send({ ok: true });
 });
-
-
   
 };
 

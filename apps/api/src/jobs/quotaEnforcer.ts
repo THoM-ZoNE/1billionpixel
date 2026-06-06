@@ -30,62 +30,71 @@ export async function runQuotaEnforcer(): Promise<void> {
     const onChain = await getOnChainBalance(wallet.address);
     const locked  = wallet.lockedPixels;
 
-    if (onChain >= locked) {
-      // ✅ Rendben — ha AT_RISK volt, visszaállítjuk ACTIVE-ra
-      if (wallet.atRiskSince) {
-        await prisma.wallet.update({
-          where: { address: wallet.address },
-          data: { atRiskSince: null },
-        });
-        await prisma.pixelArea.updateMany({
-          where: { walletAddress: wallet.address, status: "AT_RISK" },
-          data: { status: "ACTIVE" },
-        });
+      if (onChain >= locked) {
+        // ✅ Rendben — ha AT_RISK volt, visszaállítjuk ACTIVE-ra
+        if (wallet.atRiskSince) {
+          await prisma.wallet.update({
+            where: { address: wallet.address },
+            data: { atRiskSince: null },
+          });
+          await prisma.pixelArea.updateMany({
+            where: { walletAddress: wallet.address, status: "AT_RISK" },
+            data: { status: "ACTIVE" },
+          });
 
-        // ✅ Új függvény: restored értesítés
-        if (wallet.telegramHandle) {
-          await sendQuotaRestoredNotification(
-            wallet.telegramHandle,
-            wallet.address,
-            onChain
-          );
+          // ✅ Új függvény: restored értesítés
+          if (wallet.telegramHandle) {
+            await sendQuotaRestoredNotification(
+              wallet.telegramHandle,
+              wallet.address,
+              onChain
+            );
+          }
+
+          console.log(`[QuotaEnforcer] ${wallet.address.slice(0,8)}... restored to ACTIVE`);
         }
-
-        console.log(`[QuotaEnforcer] ${wallet.address.slice(0,8)}... restored to ACTIVE`);
-      }
-      continue;
-    }
-
-    // ⚠️ Deficit
-    const deficit = locked - onChain;
-    console.log(`[QuotaEnforcer] ${wallet.address.slice(0,8)}... deficit: ${deficit} px`);
-
-    if (!wallet.atRiskSince) {
-      // 1. futás: AT_RISK jelölés + warning értesítés
-      await prisma.wallet.update({
-        where: { address: wallet.address },
-        data: { atRiskSince: new Date() },
-      });
-      await prisma.pixelArea.updateMany({
-        where: { walletAddress: wallet.address, status: "ACTIVE" },
-        data: { status: "AT_RISK" },
-      });
-
-      // ✅ Új függvény: quota warning
-      if (wallet.telegramHandle) {
-        await sendQuotaWarning(
-          wallet.telegramHandle,
-          wallet.address,
-          onChain,
-          locked,
-          deficit,
-          GRACE_HOURS
-        );
+        continue;
       }
 
-      console.log(`[QuotaEnforcer] ${wallet.address.slice(0,8)}... marked AT_RISK, notification sent`);
-      continue;
+      // ⚠️ Deficit
+      const deficit = locked - onChain;
+      console.log(`[QuotaEnforcer] ${wallet.address.slice(0,8)}... deficit: ${deficit} px`);
+
+      if (!wallet.atRiskSince) {
+    // Ha nemrég már resize-oltuk → ne küldjön új warningot
+    if (wallet.lastResizedAt) {
+      const sinceResize = Date.now() - wallet.lastResizedAt.getTime();
+      const cooldownMs = GRACE_HOURS * 60 * 60 * 1000;
+      if (sinceResize < cooldownMs) {
+        console.log(`[QuotaEnforcer] ${wallet.address.slice(0,8)}... recently resized, skipping warning`);
+        continue;
+      }
+  }
+
+    // AT_RISK jelölés + warning
+    await prisma.wallet.update({
+      where: { address: wallet.address },
+      data: { atRiskSince: new Date() },
+    });
+    await prisma.pixelArea.updateMany({
+      where: { walletAddress: wallet.address, status: "ACTIVE" },
+      data: { status: "AT_RISK" },
+    });
+
+    if (wallet.telegramHandle) {
+      await sendQuotaWarning(
+        wallet.telegramHandle,
+        wallet.address,
+        onChain,
+        locked,
+        deficit,
+        GRACE_HOURS
+      );
     }
+
+    console.log(`[QuotaEnforcer] ${wallet.address.slice(0,8)}... marked AT_RISK, notification sent`);
+    continue;
+  }
 
     // 2. futás: türelmi idő lejárt?
     const gracePeriodMs = GRACE_HOURS * 60 * 60 * 1000;
@@ -122,17 +131,19 @@ export async function runQuotaEnforcer(): Promise<void> {
       remainingAllowed -= allowedForArea < areaPixels ? allowedForArea : areaPixels;
     }
 
-    // AT_RISK reset
+        // AT_RISK reset + lastResizedAt timestamp
     await prisma.wallet.update({
       where: { address: wallet.address },
-      data: { atRiskSince: null },
+      data: {
+        atRiskSince: null,
+        lastResizedAt: new Date(),   // ← ÚJ
+      },
     });
     await prisma.pixelArea.updateMany({
       where: { walletAddress: wallet.address, status: "AT_RISK" },
       data: { status: "ACTIVE" },
     });
 
-    // ✅ Új függvény: resize értesítés
     if (wallet.telegramHandle) {
       await sendResizeNotification(
         wallet.telegramHandle,

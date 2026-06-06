@@ -1,5 +1,15 @@
+import { prisma } from "@1bp/database";
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const GROUP_ID  = process.env.TELEGRAM_GROUP_ID;
+
+// ── Helper: handle → numerikus chatId lookup ─────────────────────────────────
+async function getChatIdByHandle(handle: string): Promise<string | null> {
+  const clean = handle.replace(/^@/, "").toLowerCase();
+  const record = await prisma.telegramVerification.findUnique({
+    where: { handle: clean },
+  });
+  return record?.chatId ?? null;
+}
 
 async function sendMessage(chatId: string | number, text: string): Promise<boolean> {
   if (!BOT_TOKEN) {
@@ -35,7 +45,11 @@ export async function sendQuotaWarning(
   deficit: bigint,
   graceHours: number
 ): Promise<boolean> {
-  const chatId = handle.startsWith("@") ? handle : `@${handle}`;
+  const chatId = await getChatIdByHandle(handle);
+  if (!chatId) {
+    console.log(`[Telegram] No chatId for ${handle}, skipping DM`);
+    return false;
+  }
   const msg =
     `⚠️ <b>1BillionPixel — Quota Warning</b>\n\n` +
     `Wallet: <code>${walletAddress.slice(0,8)}...${walletAddress.slice(-4)}</code>\n\n` +
@@ -54,7 +68,11 @@ export async function sendResizeNotification(
   walletAddress: string,
   onChain: bigint
 ): Promise<boolean> {
-  const chatId = handle.startsWith("@") ? handle : `@${handle}`;
+  const chatId = await getChatIdByHandle(handle);
+  if (!chatId) {
+    console.log(`[Telegram] No chatId for ${handle}, skipping DM`);
+    return false;
+  }
   const msg =
     `📉 <b>1BillionPixel — Areas Resized</b>\n\n` +
     `Wallet: <code>${walletAddress.slice(0,8)}...${walletAddress.slice(-4)}</code>\n\n` +
@@ -65,13 +83,17 @@ export async function sendResizeNotification(
   return sendMessage(chatId, msg);
 }
 
-// ── DM: Quota restored (visszavásárolta a tokent) ────────────────────────────
+// ── DM: Quota restored ────────────────────────────
 export async function sendQuotaRestoredNotification(
   handle: string,
   walletAddress: string,
   onChain: bigint
 ): Promise<boolean> {
-  const chatId = handle.startsWith("@") ? handle : `@${handle}`;
+  const chatId = await getChatIdByHandle(handle);
+  if (!chatId) {
+    console.log(`[Telegram] No chatId for ${handle}, skipping DM`);
+    return false;
+  }
   const msg =
     `✅ <b>1BillionPixel — Quota Restored</b>\n\n` +
     `Wallet: <code>${walletAddress.slice(0,8)}...${walletAddress.slice(-4)}</code>\n\n` +
@@ -90,19 +112,45 @@ export async function sendNewClaimToGroup(params: {
   imageUrl?: string;
   link?: string;
 }): Promise<boolean> {
-  if (!GROUP_ID) return false;
+  if (!GROUP_ID || !BOT_TOKEN) return false;
+
   const { walletAddress, x, y, width, height, imageUrl, link } = params;
   const pixels = (width * height).toLocaleString();
-  const shortWallet = `${walletAddress.slice(0,6)}...${walletAddress.slice(-4)}`;
+  const shortWallet = `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`;
 
-  const msg =
+  // Focus area link: /canvas/live?x=...&y=...&w=...&h=...
+  const focusUrl = `https://1billionpixel.fun/canvas/live?x=${x}&y=${y}&w=${width}&h=${height}`;
+
+  const caption =
     `🖼 <b>New Pixel Claim!</b>\n\n` +
     `👛 Wallet: <code>${shortWallet}</code>\n` +
     `📐 Size: <b>${width}×${height}</b> = <b>${pixels} px</b>\n` +
     `📍 Position: (${x}, ${y})\n` +
     (link ? `🔗 <a href="${link}">${link}</a>\n` : "") +
-    (imageUrl ? `\n🖼 <a href="${imageUrl}">View image</a>` : "") +
-    `\n\n👉 <a href="https://1billionpixel.fun/canvas/live">View on canvas</a>`;
+    `\n👉 <a href="${focusUrl}">View on canvas →</a>`;
 
-  return sendMessage(GROUP_ID, msg);
+  // Ha van kép → sendPhoto (inline preview), különben sendMessage
+  if (imageUrl) {
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: GROUP_ID,
+          photo: imageUrl,
+          caption,
+          parse_mode: "HTML",
+        }),
+      });
+      const data = await res.json();
+      if (!data.ok) console.warn("[Telegram] sendPhoto failed:", data.description);
+      return data.ok;
+    } catch (err) {
+      console.error("[Telegram] sendPhoto error:", err);
+      return false;
+    }
+  }
+
+  // Fallback: nincs kép → sima szöveges üzenet
+  return sendMessage(GROUP_ID, caption);
 }
