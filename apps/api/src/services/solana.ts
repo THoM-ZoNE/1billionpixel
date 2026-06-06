@@ -46,37 +46,54 @@ export const syncWalletBalance = async (address: string) => {
   console.log("[sync] address:", address);
   console.log("[sync] mint:", process.env.NEXT_PUBLIC_TOKEN_MINT);
   console.log("[sync] rpc:", process.env.SOLANA_RPC_URL ?? process.env.NEXT_PUBLIC_SOLANA_RPC_URL);
-  
+
   const onChain = await getOnChainBalance(address);
   console.log("[sync] onChain balance:", onChain.toString());
-  const existing       = await prisma.wallet.findUnique({ where: { address } });
-  const lockedPixels   = existing?.lockedPixels ?? 0n;
+
+  const existing = await prisma.wallet.findUnique({ where: { address } });
+
+  // ✅ lockedPixels újraszámítása az aktív area-kból
+  const activeAreas = await prisma.pixelArea.findMany({
+    where: {
+      walletAddress: address,
+      status: { in: ["ACTIVE", "AT_RISK"] },
+    },
+    select: { pixelCount: true },
+  });
+
+  const lockedPixels = activeAreas.reduce(
+    (sum, a) => sum + BigInt(a.pixelCount.toString()),
+    0n
+  );
+
   const availableQuota = onChain >= lockedPixels ? onChain - lockedPixels : 0n;
 
-  // If manualOverride is enabled, only update lastSynced —
-  // totalQuota and availableQuota were set manually, do not override them.
+  console.log("[sync] lockedPixels (recalc):", lockedPixels.toString());
+  console.log("[sync] availableQuota:", availableQuota.toString());
+
   const wallet = await prisma.wallet.upsert({
-    where:  { address },
+    where: { address },
     create: {
       address,
-      totalQuota:     onChain,
-      lockedPixels:   0n,
+      totalQuota: onChain,
+      lockedPixels: 0n,
       availableQuota: onChain,
     },
     update: existing?.manualOverride
       ? { lastSynced: new Date() }
-      : { totalQuota: onChain, availableQuota: availableQuota, lastSynced: new Date() },
+      : {
+          totalQuota: onChain,
+          lockedPixels,          // ← ÚJ: area-kból újraszámítva
+          availableQuota,
+          lastSynced: new Date(),
+        },
   });
 
-  // availableQuota is always computed on-the-fly — stored DB value may drift
-  const effectiveAvailable = wallet.totalQuota >= wallet.lockedPixels
-    ? wallet.totalQuota - wallet.lockedPixels
-    : 0n;
   return {
     ...wallet,
-    totalQuota:     wallet.totalQuota.toString(),
-    lockedPixels:   wallet.lockedPixels.toString(),
-    availableQuota: effectiveAvailable.toString(),
+    totalQuota: onChain.toString(),
+    lockedPixels: lockedPixels.toString(),
+    availableQuota: availableQuota.toString(),
   };
 };
 

@@ -1,5 +1,5 @@
 import { prisma } from "@1bp/database";
-import { getOnChainBalance } from "../services/solana.js";
+import { getOnChainBalance, syncWalletBalance } from "../services/solana.js";
 import { scaleAreaProportionally } from "../services/imageScaler.js";
 import {
   sendQuotaWarning,
@@ -8,34 +8,6 @@ import {
 } from "../services/telegram.js";
 
 const GRACE_HOURS = Number(process.env.QUOTA_GRACE_HOURS ?? 1);
-
-async function recalcWalletQuota(walletAddress: string) {
-  const areas = await prisma.pixelArea.findMany({
-    where: {
-      walletAddress,
-      status: { in: ["ACTIVE", "AT_RISK"] },
-    },
-    select: { pixelCount: true },
-  });
-
-  const lockedPixels = areas.reduce((sum, a) => sum + BigInt(a.pixelCount.toString()), 0n);
-
-  const wallet = await prisma.wallet.findUnique({
-    where: { address: walletAddress },
-    select: { totalQuota: true },
-  });
-
-  const totalQuota = wallet?.totalQuota ?? 0n;
-  const availableQuota = totalQuota > lockedPixels ? totalQuota - lockedPixels : 0n;
-
-  await prisma.wallet.update({
-    where: { address: walletAddress },
-    data: {
-      lockedPixels,
-      availableQuota,
-    },
-  });
-}
 
 export async function runQuotaEnforcer(): Promise<void> {
   console.log("[QuotaEnforcer] Starting run...");
@@ -148,15 +120,6 @@ export async function runQuotaEnforcer(): Promise<void> {
         continue;
       }
 
-          for (const area of wallet.areas) {
-      if (remainingAllowed <= 0n) {
-        await prisma.pixelArea.update({
-          where: { id: area.id },
-          data: { status: "RELEASED" },
-        });
-        continue;
-      }
-
       const areaPixels = area.pixelCount;
       const proportion = Number(areaPixels) / Number(locked);
       const allowedForArea = BigInt(Math.floor(Number(totalAllowed) * proportion));
@@ -167,20 +130,7 @@ export async function runQuotaEnforcer(): Promise<void> {
 
       remainingAllowed -= allowedForArea < areaPixels ? allowedForArea : areaPixels;
     }
-
-    await recalcWalletQuota(wallet.address);
-
-      const areaPixels = area.pixelCount;
-      const proportion = Number(areaPixels) / Number(locked);
-      const allowedForArea = BigInt(Math.floor(Number(totalAllowed) * proportion));
-
-      if (allowedForArea < areaPixels) {
-        await scaleAreaProportionally(area.id, allowedForArea);
-      }
-
-      remainingAllowed -= allowedForArea < areaPixels ? allowedForArea : areaPixels;
-    }
-
+    await syncWalletBalance(wallet.address);
         // AT_RISK reset + lastResizedAt timestamp
     await prisma.wallet.update({
       where: { address: wallet.address },
