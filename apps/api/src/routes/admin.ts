@@ -3,6 +3,10 @@ import { FastifyPluginAsync } from "fastify";
 import { prisma } from "@1bp/database";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import {
+  sendAreaAvailableToGroup,    
+  sendModerationNotification,  
+} from "../services/telegram.js";
 
 const JWT_SECRET = process.env.JWT_SECRET ?? "jwt_titkos_kulcs";
 
@@ -159,7 +163,12 @@ protectedApp.delete<{ Params: { id: string } }>("/areas/:id", async (req, reply)
       },
     }),
   ]);
-
+  await sendAreaAvailableToGroup({
+      x: area.x,
+      y: area.y,
+      width: area.width,
+      height: area.height,
+    });
   return { ok: true };
 });
 
@@ -239,6 +248,10 @@ protectedApp.post<{
           },
         }),
       ]);
+      if (area.wallet.telegramHandle) {
+      await sendModerationNotification(area.wallet.telegramHandle, area.walletAddress, "warn");
+    }
+    await sendAreaAvailableToGroup({ x: area.x, y: area.y, width: area.width, height: area.height });
       return { ok: true, action: "warn", message: "Image removed, quota restored, violation +1" };
     }
 
@@ -255,6 +268,10 @@ protectedApp.post<{
           },
         }),
       ]);
+      if (area.wallet.telegramHandle) {
+      await sendModerationNotification(area.wallet.telegramHandle, area.walletAddress, "punish");
+    }
+    await sendAreaAvailableToGroup({ x: area.x, y: area.y, width: area.width, height: area.height });
       return { ok: true, action: "punish", message: "Image removed, quota lost, violation +1" };
     }
 
@@ -271,6 +288,10 @@ protectedApp.post<{
           },
         }),
       ]);
+      if (area.wallet.telegramHandle) {
+      await sendModerationNotification(area.wallet.telegramHandle, area.walletAddress, "ban");
+    }
+    await sendAreaAvailableToGroup({ x: area.x, y: area.y, width: area.width, height: area.height });
       return { ok: true, action: "ban", message: "Image removed, quota lost, wallet banned" };
     }
 

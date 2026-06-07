@@ -17,8 +17,8 @@ const RATIOS: Record<string, [number, number]> = {
   "16:9": [16, 9], "21:9": [21, 9], "9:16": [9, 16],
 };
 
-const MIN_PX        = 10;
-const GRID_SNAP     = 10;
+const MIN_PX        = 100;
+const GRID_SNAP     = 5;
 const NEIGHBOR_SNAP = 20;
 
 const snapToGrid      = (v: number) => Math.round(v / GRID_SNAP) * GRID_SNAP;
