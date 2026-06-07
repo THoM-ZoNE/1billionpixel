@@ -78,7 +78,7 @@ export async function sendResizeNotification(
     `Wallet: <code>${walletAddress.slice(0,8)}...${walletAddress.slice(-4)}</code>\n\n` +
     `Your claimed areas have been proportionally reduced to match your ` +
     `current balance of <b>${Number(onChain).toLocaleString()} $1BPX</b>.\n\n` +
-    `To restore your areas, buy back the tokens and re-claim.\n\n` +
+    `To restore your areas, send a message to support@1bpx.fun.\n\n` +
     `👉 <a href="https://pump.fun">Buy $1BPX on PumpFun</a>`;
   return sendMessage(chatId, msg);
 }
