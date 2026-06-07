@@ -109,17 +109,18 @@ export async function sendNewClaimToGroup(params: {
   y: number;
   width: number;
   height: number;
+  areaId: string;
   imageUrl?: string;
   link?: string;
 }): Promise<boolean> {
   if (!GROUP_ID || !BOT_TOKEN) return false;
 
-  const { walletAddress, x, y, width, height, imageUrl, link } = params;
+  const { walletAddress, x, y, width, height, imageUrl, link, areaId } = params;
   const pixels = (width * height).toLocaleString();
   const shortWallet = `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`;
 
   // Focus area link: /canvas/live?x=...&y=...&w=...&h=...
-  const focusUrl = `https://1billionpixel.fun/canvas/live?x=${x}&y=${y}&w=${width}&h=${height}`;
+  const focusUrl = `https://1billionpixel.fun/canvas/live?area=${areaId}`;
 
   const caption =
     `🖼 <b>New Pixel Claim!</b>\n\n` +

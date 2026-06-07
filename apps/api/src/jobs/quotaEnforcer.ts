@@ -33,26 +33,28 @@ export async function runQuotaEnforcer(): Promise<void> {
       if (onChain >= locked) {
         // ✅ Rendben — ha AT_RISK volt, visszaállítjuk ACTIVE-ra
         if (wallet.atRiskSince) {
-          await prisma.wallet.update({
-            where: { address: wallet.address },
-            data: { atRiskSince: null },
-          });
-          await prisma.pixelArea.updateMany({
-            where: { walletAddress: wallet.address, status: "AT_RISK" },
-            data: { status: "ACTIVE" },
-          });
+  const updated = await prisma.pixelArea.updateMany({
+    where: { walletAddress: wallet.address, status: "AT_RISK" },
+    data: { status: "ACTIVE" },
+  });
 
-          // ✅ Új függvény: restored értesítés
-          if (wallet.telegramHandle) {
-            await sendQuotaRestoredNotification(
-              wallet.telegramHandle,
-              wallet.address,
-              onChain
-            );
-          }
+  await prisma.wallet.update({
+    where: { address: wallet.address },
+    data: { atRiskSince: null },
+  });
 
-          console.log(`[QuotaEnforcer] ${wallet.address.slice(0,8)}... restored to ACTIVE`);
-        }
+  // ✅ Csak akkor küld értesítőt ha tényleg volt visszaállított area
+  if (updated.count > 0 && wallet.telegramHandle) {
+    await sendQuotaRestoredNotification(
+      wallet.telegramHandle,
+      wallet.address,
+      onChain
+    );
+    console.log(`[QuotaEnforcer] ${wallet.address.slice(0,8)}... restored to ACTIVE (${updated.count} areas)`);
+  } else {
+    console.log(`[QuotaEnforcer] ${wallet.address.slice(0,8)}... atRiskSince cleared, no active areas to restore`);
+  }
+}
         continue;
       }
 

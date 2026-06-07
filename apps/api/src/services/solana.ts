@@ -43,16 +43,15 @@ export const getOnChainBalance = async (walletAddress: string): Promise<bigint> 
 
 
 export const syncWalletBalance = async (address: string) => {
-  console.log("[sync] address:", address);
-  console.log("[sync] mint:", process.env.NEXT_PUBLIC_TOKEN_MINT);
-  console.log("[sync] rpc:", process.env.SOLANA_RPC_URL ?? process.env.NEXT_PUBLIC_SOLANA_RPC_URL);
+  const short = `${address.slice(0,8)}...${address.slice(-4)}`;
+  
+  console.log(`[sync:${short}] onChain check...`);
 
   const onChain = await getOnChainBalance(address);
-  console.log("[sync] onChain balance:", onChain.toString());
-
-  const existing = await prisma.wallet.findUnique({ where: { address } });
-
-  // ✅ lockedPixels újraszámítása az aktív area-kból
+  const existing = await prisma.wallet.findUnique({
+    where: { address },
+    select: { manualOverride: true },
+  });
   const activeAreas = await prisma.pixelArea.findMany({
     where: {
       walletAddress: address,
@@ -68,8 +67,9 @@ export const syncWalletBalance = async (address: string) => {
 
   const availableQuota = onChain >= lockedPixels ? onChain - lockedPixels : 0n;
 
-  console.log("[sync] lockedPixels (recalc):", lockedPixels.toString());
-  console.log("[sync] availableQuota:", availableQuota.toString());
+  console.log(
+    `[sync:${short}] onChain=${onChain} | locked=${lockedPixels} | available=${availableQuota}`
+  );
 
   const wallet = await prisma.wallet.upsert({
     where: { address },
