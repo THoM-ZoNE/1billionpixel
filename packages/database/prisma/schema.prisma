@@ -12,6 +12,8 @@ model Wallet {
   address          String        @id
   totalQuota       BigInt        @default(0)   // token balance (tokens = pixels)
   lockedPixels     BigInt        @default(0)   // sum of all claimed area pixels
+  penaltyPixels    BigInt        @default(0)
+  bonusPixels      BigInt        @default(0)
   availableQuota   BigInt        @default(0)   // totalQuota - lockedPixels
   gracePeriodEnd   DateTime?
   lastSynced       DateTime      @default(now())

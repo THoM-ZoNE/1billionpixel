@@ -6,6 +6,7 @@ import React, { useState, useEffect, useCallback } from "react";
 
 type WalletRow = {
   address: string;
+  telegramHandle: string | null;
   totalQuota: number;
   skipSignature: boolean;
   violationCount: number;   
@@ -177,15 +178,14 @@ const unbanWallet = async (address: string) => {
         {wallets.map((w) => (
           <React.Fragment key={w.address}>
             <tr key={w.address} style={{ borderBottom: "1px solid #222" }}>
-              <td
-                style={{
-                  padding: "6px 8px",
-                  fontFamily: "monospace",
-                  fontSize: 11,
-                }}
-              >
-                {w.address.slice(0, 8)}...{w.address.slice(-6)}
-              </td>
+              <td style={{ padding: "6px 8px", fontFamily: "monospace", fontSize: 11 }}>
+              <div>{w.address.slice(0, 8)}...{w.address.slice(-6)}</div>
+              {w.telegramHandle && (
+                <div style={{ color: "#64b5f6", fontSize: 10, marginTop: 2 }}>
+                  {w.telegramHandle}
+                </div>
+              )}
+            </td>
               <td style={{ textAlign: "center", padding: "6px 8px" }}>
                 {((w.totalQuota ?? 0).toLocaleString())}
               </td>
@@ -385,6 +385,15 @@ export default function AdminPage() {
   const [forbiddenZones, setForbiddenZones] = useState<ForbiddenZone[]>([]);
   const [testAddress, setTestAddress] = useState("");
   const [testQuota, setTestQuota] = useState("10000000");
+  const [search, setSearch] = useState("");
+  const filteredWallets = wallets.filter((w) => {
+  if (!search.trim()) return true;
+  const q = search.toLowerCase();
+  return (
+    w.address.toLowerCase().includes(q) ||
+    (w.telegramHandle ?? "").toLowerCase().includes(q)
+  );
+});
 
   const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -546,16 +555,45 @@ export default function AdminPage() {
       </section>
 
       {/* ── Wallet list ── */}
-      <section style={{ marginTop: 32 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
-          <h3 style={{ color: "#aaa", margin: 0 }}>Wallet-ek ({wallets.length})</h3>
-          <button onClick={fetchWallets}
-            style={{ padding: "4px 12px", background: "#222", color: "#aaa", border: "1px solid #444", borderRadius: 6, cursor: "pointer", fontSize: 12 }}>
-            Refresh
-          </button>
-        </div>
-        <WalletTable wallets={wallets} token={token} onRefresh={fetchWallets} />
-      </section>
+<section style={{ marginTop: 32 }}>
+  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
+    <h3 style={{ color: "#aaa", margin: 0 }}>
+      Wallet-ek ({filteredWallets.length}/{wallets.length})  {/* ← szűrt/összes */}
+    </h3>
+    <input
+      value={search}
+      onChange={(e) => setSearch(e.target.value)}
+      placeholder="🔍 Wallet address or @telegramID..."
+      style={{
+        padding: "4px 10px",
+        background: "#111",
+        border: "1px solid #333",
+        color: "#fff",
+        borderRadius: 6,
+        fontSize: 12,
+        width: 260,
+      }}
+    />
+    {search && (
+      <button
+        onClick={() => setSearch("")}
+        style={{ padding: "4px 8px", background: "#222", color: "#aaa",
+          border: "1px solid #444", borderRadius: 6, cursor: "pointer", fontSize: 11 }}
+      >
+        ✕ Clear
+      </button>
+    )}
+    <button
+      onClick={fetchWallets}
+      style={{ padding: "4px 12px", background: "#222", color: "#aaa",
+        border: "1px solid #444", borderRadius: 6, cursor: "pointer", fontSize: 12 }}
+    >
+      Refresh
+    </button>
+  </div>
+  {/* ← filteredWallets-et kap, nem wallets-et */}
+  <WalletTable wallets={filteredWallets} token={token} onRefresh={fetchWallets} />
+</section>
     </div>
   );
 }

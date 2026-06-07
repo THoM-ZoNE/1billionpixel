@@ -1,7 +1,6 @@
 import { prisma } from "@1bp/database";
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const GROUP_ID  = process.env.TELEGRAM_GROUP_ID;
-const MIN_AREA_PIXELS = 10_000; // 100x100
+const GROUP_ID  = process.env.TELEGRAM_GROUP_ID;  
 
 // ── Helper: handle → numeric chatId lookup ─────────────────────────────────
 async function getChatIdByHandle(handle: string): Promise<string | null> {
@@ -144,35 +143,52 @@ export async function sendAreaAvailableToGroup(params: {
     `A pixel area has just been released — grab it before someone else does!\n\n` +
     `👉 <a href="${canvasUrl}">Claim on 1BillionPixel →</a>`;
 
-  return sendMessage(GROUP_ID, msg);
+  return sendMessage(GROUP_ID!, msg);
 }
 // ── DM: Moderation Notification ──────────────────────────────────────────
 export async function sendModerationNotification(
   handle: string,
   walletAddress: string,
-  action: "warn" | "punish" | "ban"
+  action: "warn" | "punish" | "ban"| "unban" | "bonus",
+  meta?:{ pixels?: number; reason?: string }
 ): Promise<boolean> {
   const chatId = await getChatIdByHandle(handle);
   if (!chatId) return false;
 
-  const messages = {
-    warn:
-      `⚠️ <b>1BillionPixel — Content Warning</b>\n\n` +
-      `Wallet: <code>${walletAddress.slice(0,8)}...${walletAddress.slice(-4)}</code>\n\n` +
-      `Your pixel area has been removed due to a content violation.\n` +
-      `Your quota has been restored. This is your first warning.\n\n` +
-      `Please review our <a href="https://1billionpixel.fun/faq">community guidelines</a>.`,
-    punish:
-      `🚫 <b>1BillionPixel — Content Violation</b>\n\n` +
-      `Wallet: <code>${walletAddress.slice(0,8)}...${walletAddress.slice(-4)}</code>\n\n` +
-      `Your pixel area has been removed and your quota has been permanently reduced due to a repeated violation.`,
-    ban:
-      `🔴 <b>1BillionPixel — Wallet Banned</b>\n\n` +
-      `Wallet: <code>${walletAddress.slice(0,8)}...${walletAddress.slice(-4)}</code>\n\n` +
-      `Your wallet has been banned due to repeated content violations. You can no longer claim pixel areas.`,
-  };
+  const short = `${walletAddress.slice(0, 8)}...${walletAddress.slice(-4)}`;
+const wallet = `Wallet: <code>${short}</code>\n\n`;
 
-  return sendMessage(chatId, messages[action]);
+const messages: Record<string, string> = {
+  warn:
+    `⚠️ <b>1BillionPixel — Content Warning</b>\n\n` + wallet +
+    `Your pixel area has been removed due to a content violation.\n` +
+    `Your quota has been restored. This is your first warning.\n\n` +
+    `Please review our <a href="https://1billionpixel.fun/faq">community guidelines</a>.`,
+
+  punish:
+    `🚫 <b>1BillionPixel — Content Violation</b>\n\n` + wallet +
+    `Your pixel area has been removed and your quota has been permanently reduced due to a repeated violation.`,
+
+  ban:
+    `🔴 <b>1BillionPixel — Wallet Banned</b>\n\n` + wallet +
+    `Your wallet has been banned due to repeated content violations. You can no longer claim pixel areas.`,
+
+  unban:
+    `✅ <b>1BillionPixel — Wallet Unbanned</b>\n\n` + wallet +
+    `Your wallet ban has been lifted and your violation count has been reset.\n\n` +
+    `👉 <a href="https://1billionpixel.fun">Claim your pixels →</a>`,
+};
+
+if (action === "bonus") {
+  const bonusMsg =
+    `🎁 <b>1BillionPixel — Bonus Pixels!</b>\n\n` + wallet +
+    `You've received <b>${meta?.pixels?.toLocaleString() ?? "?"} bonus pixels</b>! 🎉\n` +
+    (meta?.reason ? `Reason: ${meta.reason}\n\n` : `\n`) +
+    `👉 <a href="https://1billionpixel.fun">Claim your area →</a>`;
+  return sendMessage(chatId, bonusMsg);
+}
+
+return sendMessage(chatId, messages[action]);
 }
 // ── Group: New claim notify ────────────────────────────────────────────────
 export async function sendNewClaimToGroup(params: {
@@ -204,11 +220,11 @@ export async function sendNewClaimToGroup(params: {
   // If imageUrl is provided → sendPhoto (inline preview), otherwise sendMessage
   if (imageUrl) {
     try {
-      const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+      const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN!}/sendPhoto`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          chat_id: GROUP_ID,
+          chat_id: GROUP_ID!,
           photo: imageUrl,
           caption,
           parse_mode: "HTML",
@@ -224,6 +240,6 @@ export async function sendNewClaimToGroup(params: {
   }
 
   // Fallback: no image → standard text message
-  return sendMessage(GROUP_ID, caption);
+  return sendMessage(GROUP_ID!, caption);
   
 }

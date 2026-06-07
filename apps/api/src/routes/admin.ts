@@ -163,12 +163,12 @@ protectedApp.delete<{ Params: { id: string } }>("/areas/:id", async (req, reply)
       },
     }),
   ]);
-  await sendAreaAvailableToGroup({
-      x: area.x,
-      y: area.y,
-      width: area.width,
-      height: area.height,
+  if (area.status !== "RELEASED") {
+    await sendAreaAvailableToGroup({
+      x: area.x, y: area.y,
+      width: area.width, height: area.height,
     });
+  }
   return { ok: true };
 });
 
@@ -220,6 +220,33 @@ protectedApp.delete("/forbidden", async () => {
 
   return { deleted: forbiddenAreas.length };
 });
+// POST /admin/wallets/:address/bonus
+  protectedApp.post<{
+    Params: { address: string };
+    Body: { pixels: number; reason?: string };
+    }>("/wallets/:address/bonus", async (req) => {
+      const { pixels, reason } = req.body;
+
+      const wallet = await prisma.wallet.update({
+        where: { address: req.params.address },
+        data: {
+          bonusPixels:    { increment: pixels },
+          availableQuota: { increment: pixels },
+          },
+        });
+
+        // Opcionális: DM értesítő a felhasználónak
+        if (wallet.telegramHandle) {
+          await sendModerationNotification(
+            wallet.telegramHandle,
+            req.params.address,
+            "bonus",
+            { pixels, reason }
+          );
+        }
+
+  return wallet;
+});
 protectedApp.post<{
   Body: { areaId: string; action: "warn" | "punish" | "ban" }
 }>(
@@ -251,19 +278,26 @@ protectedApp.post<{
       if (area.wallet.telegramHandle) {
       await sendModerationNotification(area.wallet.telegramHandle, area.walletAddress, "warn");
     }
-    await sendAreaAvailableToGroup({ x: area.x, y: area.y, width: area.width, height: area.height });
+    if (area.status !== "RELEASED") {
+  await sendAreaAvailableToGroup({
+    x: area.x, y: area.y,
+    width: area.width, height: area.height,
+  });
+}
       return { ok: true, action: "warn", message: "Image removed, quota restored, violation +1" };
     }
 
     if (action === "punish") {
       // 2. alkalom: kép törölve, quota elvész
+      const penaltyAmount = area.pixelCount;
       await prisma.$transaction([
         prisma.pixelArea.delete({ where: { id: areaId } }),
         prisma.wallet.update({
           where: { address: area.walletAddress },
           data: {
-            lockedPixels:   { decrement: pixelCount },
-            // availableQuota NEM nő vissza → quota elveszik
+            penaltyPixels: { increment: penaltyAmount }, // ← permanens büntetés rögzítve
+            lockedPixels:  { decrement: area.pixelCount },
+            availableQuota: { decrement: 0 },
             violationCount: { increment: 1 },
           },
         }),
@@ -271,7 +305,12 @@ protectedApp.post<{
       if (area.wallet.telegramHandle) {
       await sendModerationNotification(area.wallet.telegramHandle, area.walletAddress, "punish");
     }
-    await sendAreaAvailableToGroup({ x: area.x, y: area.y, width: area.width, height: area.height });
+    if (area.status !== "RELEASED") {
+  await sendAreaAvailableToGroup({
+    x: area.x, y: area.y,
+    width: area.width, height: area.height,
+  });
+}
       return { ok: true, action: "punish", message: "Image removed, quota lost, violation +1" };
     }
 
@@ -291,7 +330,12 @@ protectedApp.post<{
       if (area.wallet.telegramHandle) {
       await sendModerationNotification(area.wallet.telegramHandle, area.walletAddress, "ban");
     }
-    await sendAreaAvailableToGroup({ x: area.x, y: area.y, width: area.width, height: area.height });
+    if (area.status !== "RELEASED") {
+  await sendAreaAvailableToGroup({
+    x: area.x, y: area.y,
+    width: area.width, height: area.height,
+  });
+}
       return { ok: true, action: "ban", message: "Image removed, quota lost, wallet banned" };
     }
 
@@ -299,14 +343,24 @@ protectedApp.post<{
   }
 );
 
-// POST /admin/wallets/:address/unban
 protectedApp.post<{ Params: { address: string } }>(
   "/wallets/:address/unban",
   async (req) => {
-    return prisma.wallet.update({
+    const wallet = await prisma.wallet.update({
       where: { address: req.params.address },
       data: { bannedAt: null, violationCount: 0 },
     });
+
+    // ✅ DM értesítő ha van telegram handle
+    if (wallet.telegramHandle) {
+      await sendModerationNotification(
+        wallet.telegramHandle,
+        req.params.address,
+        "unban"
+      );
+    }
+
+    return wallet;
   }
 );
   });

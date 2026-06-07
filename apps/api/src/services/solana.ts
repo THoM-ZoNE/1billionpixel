@@ -44,14 +44,23 @@ export const getOnChainBalance = async (walletAddress: string): Promise<bigint> 
 
 export const syncWalletBalance = async (address: string) => {
   const short = `${address.slice(0,8)}...${address.slice(-4)}`;
-  
+
   console.log(`[sync:${short}] onChain check...`);
 
   const onChain = await getOnChainBalance(address);
   const existing = await prisma.wallet.findUnique({
     where: { address },
-    select: { manualOverride: true },
+    select: {
+      manualOverride: true,
+      bannedAt:       true,   // ← ÚJ
+      penaltyPixels:  true,   // ← ÚJ
+      bonusPixels:    true,   // ← ÚJ
+    },
   });
+
+  // Bannolt wallet ne frissüljön
+  if (existing?.bannedAt) return;
+
   const activeAreas = await prisma.pixelArea.findMany({
     where: {
       walletAddress: address,
@@ -65,27 +74,35 @@ export const syncWalletBalance = async (address: string) => {
     0n
   );
 
-  const availableQuota = onChain >= lockedPixels ? onChain - lockedPixels : 0n;
+  // ← MÓDOSÍTOTT: penalty és bonus figyelembevétele
+  const penalty = existing?.penaltyPixels ?? 0n;
+  const bonus   = existing?.bonusPixels   ?? 0n;
+  const rawQuota = onChain + bonus - penalty - lockedPixels;
+  const availableQuota = rawQuota > 0n ? rawQuota : 0n;
 
   console.log(
-    `[sync:${short}] onChain=${onChain} | locked=${lockedPixels} | available=${availableQuota}`
+    `[sync:${short}] onChain=${onChain} | locked=${lockedPixels} | penalty=${penalty} | bonus=${bonus} | available=${availableQuota}`
   );
 
   const wallet = await prisma.wallet.upsert({
     where: { address },
     create: {
       address,
-      totalQuota: onChain,
-      lockedPixels: 0n,
+      totalQuota:    onChain,
+      lockedPixels:  0n,
       availableQuota: onChain,
+      penaltyPixels:  0n,   // ← ÚJ
+      bonusPixels:    0n,   // ← ÚJ
     },
     update: existing?.manualOverride
       ? { lastSynced: new Date() }
       : {
-          totalQuota: onChain,
-          lockedPixels,          // ← ÚJ: area-kból újraszámítva
+          totalQuota:    onChain,
+          lockedPixels,
           availableQuota,
           lastSynced: new Date(),
+          // penaltyPixels és bonusPixels itt NEM szerepel —
+          // azokat csak az admin endpoint írja!
         },
   });
 
