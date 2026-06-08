@@ -10,6 +10,7 @@ type WalletRow = {
   totalQuota: number;
   bonusPixels: number;  
   penaltyPixels: number;
+  manualOverride: boolean;
   skipSignature: boolean;
   violationCount: number;   
   bannedAt: string | null;
@@ -186,6 +187,19 @@ const unbanWallet = async (address: string) => {
   alert(data.error ? `❌ ${data.error}` : `✅ Bonus added: ${Number(input).toLocaleString()} px`);
   onRefresh();
 };
+const resetOverride = async (address: string) => {
+  const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+  const res = await fetch(
+    `${API}/api/admin/wallets/${encodeURIComponent(address)}/reset-override`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    }
+  );
+  const data = await res.json();
+  alert(data.error ? `❌ ${data.error}` : `✅ Auto-sync enabled`);
+  onRefresh();
+};
   return (
     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
       <thead>
@@ -267,6 +281,13 @@ const unbanWallet = async (address: string) => {
                   current={w.totalQuota}
                   onSave={updateQuota}
                 />
+                <button
+              onClick={() => resetOverride(w.address)}
+              title="Reset to auto-sync"
+              style={{ fontSize: 11, color: w.manualOverride ? "#facc15" : "#4b5563", background: "none", border: "none", cursor: "pointer" }}
+            >
+              {w.manualOverride ? "🔒" : "🔄"}
+            </button>
               </td>
               {/* Bonus */}
               <td style={{ textAlign: "center", padding: "6px 8px" }}>
@@ -496,6 +517,7 @@ export default function AdminPage() {
       totalQuota: Number(w.totalQuota ?? 0),
       bonusPixels:   Number(w.bonusPixels   ?? 0),
       penaltyPixels: Number(w.penaltyPixels ?? 0),
+      manualOverride: w.manualOverride ?? false,
     })));
   }
   }, [token]);

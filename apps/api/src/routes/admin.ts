@@ -204,6 +204,18 @@ protectedApp.delete("/forbidden", async () => {
     quotaMap.set(a.walletAddress, (quotaMap.get(a.walletAddress) ?? 0n) + a.pixelCount);
   }
 
+// PATCH /admin/wallets/:address/quota 
+// POST /admin/wallets/:address/reset-override
+protectedApp.post<{ Params: { address: string } }>(
+  "/wallets/:address/reset-override",
+  async (req) => {
+    return prisma.wallet.update({
+      where: { address: req.params.address },
+      data: { manualOverride: false },
+    });
+  }
+);
+
   // Delete in transaction + restore quota for every affected wallet
   await prisma.$transaction([
     prisma.pixelArea.deleteMany({ where: { status: "FORBIDDEN" } }),
