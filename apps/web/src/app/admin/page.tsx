@@ -85,7 +85,7 @@ function QuotaEditor({
         onClick={() => onResetOverride(address)}
         title={manualOverride ? "Manual mode — click to enable auto-sync" : "Auto-sync active"}
         style={{
-          fontSize: 13, background: "none", border: "none",
+          fontSize: 18, background: "none", border: "none",
           cursor: manualOverride ? "pointer" : "default",
           opacity: manualOverride ? 1 : 0.3,
           padding: "2px 4px",
@@ -300,10 +300,11 @@ const resetOverride = async (address: string) => {
                 />
               </td>
               {/* Bonus */}
-              <td style={{ textAlign: "center", padding: "6px 8px" }}>
-              <div style={{ fontSize: 10, color: "#a3e635", marginBottom: 2 }}>
+              <td style={{ textAlign: "right", padding: "6px 8px" }}>
+              <div style={{ display: "flex", gap: 6, alignItems: "center", justifyContent: "flex-end" }}>
+              <span style={{ fontSize: 11, color: "#a3e635" }}>
                 {w.bonusPixels > 0 ? `+${w.bonusPixels.toLocaleString()}` : "—"}
-              </div>
+                </span>
               <button
                 onClick={() => giveBonus(w.address)}
                 title="Give bonus pixels"
@@ -319,6 +320,7 @@ const resetOverride = async (address: string) => {
               >
                 🎁
               </button>
+              </div>
             </td>
               {/* Violations */}
               <td style={{ textAlign: "center", padding: "6px 8px" }}>
