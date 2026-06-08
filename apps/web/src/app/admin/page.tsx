@@ -8,6 +8,8 @@ type WalletRow = {
   address: string;
   telegramHandle: string | null;
   totalQuota: number;
+  bonusPixels: number;  
+  penaltyPixels: number;
   skipSignature: boolean;
   violationCount: number;   
   bannedAt: string | null;
@@ -44,7 +46,7 @@ function QuotaEditor({
   const [val, setVal] = useState(String(current ?? 0));
 
   return (
-    <div style={{ display: "flex", gap: 4 }}>
+    <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
       <input
         value={val}
         onChange={(e) => setVal(e.target.value)}
@@ -84,10 +86,12 @@ function WalletTable({
   wallets,
   token,
   onRefresh,
+  apiUrl,
 }: {
   wallets: WalletRow[];
   token: string;
   onRefresh: () => void;
+  apiUrl: string;
 }) {
   const [expanded, setExpanded] = useState<string | null>(null);
 
@@ -161,6 +165,27 @@ const unbanWallet = async (address: string) => {
     onRefresh();
   };
 
+  const giveBonus = async (address: string) => {
+  const input = window.prompt(
+    `Give bonus pixels to ${address.slice(0, 8)}...\n\nEnter pixel amount:`,
+    "100000"
+  );
+  if (!input || isNaN(Number(input))) return;
+
+  const reason = window.prompt("Reason (optional, sent in DM):", "") ?? "";
+
+  const res = await fetch(
+    `${apiUrl}/api/admin/wallets/${encodeURIComponent(address)}/bonus`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ pixels: Number(input), reason }),
+    }
+  );
+  const data = await res.json();
+  alert(data.error ? `❌ ${data.error}` : `✅ Bonus added: ${Number(input).toLocaleString()} px`);
+  onRefresh();
+};
   return (
     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
       <thead>
@@ -170,6 +195,7 @@ const unbanWallet = async (address: string) => {
           <th style={{ padding: "6px 8px" }}>Skip Sign</th>
           <th style={{ padding: "6px 8px" }}>Areas</th>
           <th style={{ padding: "6px 8px" }}>Set quota</th>
+          <th style={{ padding: "6px 8px" }}>Bonus</th>
           <th style={{ padding: "6px 8px" }}>Violations</th>
           <th style={{ padding: "6px 8px" }}>Ban</th>
         </tr>
@@ -235,13 +261,34 @@ const unbanWallet = async (address: string) => {
               </td>
 
               {/* Set quota */}
-              <td style={{ padding: "6px 8px" }}>
+              <td style={{ padding: "6px 8px", textAlign: "center" }}>
                 <QuotaEditor
                   address={w.address}
                   current={w.totalQuota}
                   onSave={updateQuota}
                 />
               </td>
+              {/* Bonus */}
+              <td style={{ textAlign: "center", padding: "6px 8px" }}>
+              <div style={{ fontSize: 10, color: "#a3e635", marginBottom: 2 }}>
+                {w.bonusPixels > 0 ? `+${w.bonusPixels.toLocaleString()}` : "—"}
+              </div>
+              <button
+                onClick={() => giveBonus(w.address)}
+                title="Give bonus pixels"
+                style={{
+                  padding: "2px 8px",
+                  background: "#14532d",
+                  color: "#86efac",
+                  border: "none",
+                  borderRadius: 4,
+                  cursor: "pointer",
+                  fontSize: 11,
+                }}
+              >
+                🎁
+              </button>
+            </td>
               {/* Violations */}
               <td style={{ textAlign: "center", padding: "6px 8px" }}>
                 <span style={{
@@ -447,6 +494,8 @@ export default function AdminPage() {
     setWallets(data.map((w: any) => ({
       ...w,
       totalQuota: Number(w.totalQuota ?? 0),
+      bonusPixels:   Number(w.bonusPixels   ?? 0),
+      penaltyPixels: Number(w.penaltyPixels ?? 0),
     })));
   }
   }, [token]);
@@ -592,7 +641,7 @@ export default function AdminPage() {
     </button>
   </div>
   {/* ← filteredWallets-et kap, nem wallets-et */}
-  <WalletTable wallets={filteredWallets} token={token} onRefresh={fetchWallets} />
+  <WalletTable wallets={filteredWallets} token={token} onRefresh={fetchWallets} apiUrl={API}/>
 </section>
     </div>
   );
