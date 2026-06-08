@@ -38,11 +38,15 @@ type ForbiddenZone = {
 function QuotaEditor({
   address,
   current,
+  manualOverride,
   onSave,
+  onResetOverride,
 }: {
   address: string;
   current: number;
+  manualOverride: boolean;
   onSave: (a: string, q: number) => void;
+  onResetOverride: (a: string) => void;
 }) {
   const [val, setVal] = useState(String(current ?? 0));
 
@@ -77,6 +81,18 @@ function QuotaEditor({
       >
         ✓
       </button>
+      <button
+        onClick={() => onResetOverride(address)}
+        title={manualOverride ? "Manual mode — click to enable auto-sync" : "Auto-sync active"}
+        style={{
+          fontSize: 13, background: "none", border: "none",
+          cursor: manualOverride ? "pointer" : "default",
+          opacity: manualOverride ? 1 : 0.3,
+          padding: "2px 4px",
+        }}
+      >
+        {manualOverride ? "🔒" : "🔄"}
+      </button>
     </div>
   );
 }
@@ -98,7 +114,7 @@ function WalletTable({
 
   const toggleSkipSig = async (address: string, current: boolean) => {
     await fetch(
-      `/api/admin/wallets/${encodeURIComponent(address)}/skipSignature`,
+      `${apiUrl}/api/admin/wallets/${encodeURIComponent(address)}/skipSignature`,
       {
         method: "PATCH",
         headers: {
@@ -113,7 +129,7 @@ function WalletTable({
 
   const deleteArea = async (areaId: string) => {
     if (!confirm("Are you sure you want to delete this area and image?")) return;
-    await fetch(`/api/admin/areas/${areaId}`, {
+    await fetch(`${apiUrl}/api/admin/areas/${areaId}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -132,7 +148,7 @@ const moderateArea = async (areaId: string, walletAddress: string, violationCoun
   );
   if (!action || !["warn", "punish", "ban"].includes(action)) return;
 
-  const res = await fetch(`/api/admin/moderate`, {
+  const res = await fetch(`${apiUrl}/api/admin/moderate`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({ areaId, action }),
@@ -144,7 +160,7 @@ const moderateArea = async (areaId: string, walletAddress: string, violationCoun
 
 const unbanWallet = async (address: string) => {
   if (!confirm(`Unban wallet ${address.slice(0, 8)}...?`)) return;
-  await fetch(`/api/admin/wallets/${encodeURIComponent(address)}/unban`, {
+  await fetch(`${apiUrl}/api/admin/wallets/${encodeURIComponent(address)}/unban`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -153,7 +169,7 @@ const unbanWallet = async (address: string) => {
 
   const updateQuota = async (address: string, quota: number) => {
     await fetch(
-      `/api/admin/wallets/${encodeURIComponent(address)}/quota`,
+      `${apiUrl}/api/admin/wallets/${encodeURIComponent(address)}/quota`,
       {
         method: "PATCH",
         headers: {
@@ -188,9 +204,8 @@ const unbanWallet = async (address: string) => {
   onRefresh();
 };
 const resetOverride = async (address: string) => {
-  const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
   const res = await fetch(
-    `${API}/api/admin/wallets/${encodeURIComponent(address)}/reset-override`,
+    `${apiUrl}/api/admin/wallets/${encodeURIComponent(address)}/reset-override`,
     {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
@@ -279,15 +294,10 @@ const resetOverride = async (address: string) => {
                 <QuotaEditor
                   address={w.address}
                   current={w.totalQuota}
+                  manualOverride={w.manualOverride}
                   onSave={updateQuota}
+                  onResetOverride={resetOverride}
                 />
-                <button
-              onClick={() => resetOverride(w.address)}
-              title="Reset to auto-sync"
-              style={{ fontSize: 11, color: w.manualOverride ? "#facc15" : "#4b5563", background: "none", border: "none", cursor: "pointer" }}
-            >
-              {w.manualOverride ? "🔒" : "🔄"}
-            </button>
               </td>
               {/* Bonus */}
               <td style={{ textAlign: "center", padding: "6px 8px" }}>
@@ -341,7 +351,7 @@ const resetOverride = async (address: string) => {
             {expanded === w.address && (
               <tr key={`${w.address}-areas`}>
                 <td
-                  colSpan={5}
+                  colSpan={8}
                   style={{ background: "#1a1a1a", padding: "8px 16px" }}
                 >
                   {w.areas.length === 0 ? (
