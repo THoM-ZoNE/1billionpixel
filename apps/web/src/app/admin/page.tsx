@@ -315,7 +315,7 @@ const resetOverride = async (address: string) => {
                   border: "none",
                   borderRadius: 4,
                   cursor: "pointer",
-                  fontSize: 11,
+                  fontSize: 15,
                 }}
               >
                 🎁
@@ -641,7 +641,7 @@ export default function AdminPage() {
 <section style={{ marginTop: 32 }}>
   <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
     <h3 style={{ color: "#aaa", margin: 0 }}>
-      Wallet-ek ({filteredWallets.length}/{wallets.length})  {/* ← szűrt/összes */}
+      Wallet list ({filteredWallets.length}/{wallets.length})  {/* ← szűrt/összes */}
     </h3>
     <input
       value={search}

@@ -28,7 +28,7 @@ export function HeroSection() {
             background: "linear-gradient(135deg, #9945FF, #d946ef)",
             WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
           }}>
-            Pixels
+            Pixel
           </span>
         </h1>
         <p style={{
