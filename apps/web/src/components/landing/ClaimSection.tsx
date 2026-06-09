@@ -291,7 +291,7 @@ export function ClaimSection() {
       const cy = (e.clientY - rect.top)  * (canvas.height / rect.height);
       const { x: px, y: py, scale: ps } = vtRef.current;
       const factor   = e.deltaY > 0 ? 0.9 : 1.1;
-      const newScale = Math.max(0.5, Math.min(20, ps * factor));
+      const newScale = Math.max(0.9, Math.min(20, ps * factor));
       vtRef.current  = { x: cx - (cx - px) * (newScale / ps), y: cy - (cy - py) * (newScale / ps), scale: newScale };
       setZoomDisplay(newScale);
       if (rafRef.current) cancelAnimationFrame(rafRef.current);

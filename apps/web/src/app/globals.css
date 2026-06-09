@@ -67,15 +67,13 @@ body { background: #0a0a0a;
 
 
 .capsule-solana-inner {
-  border-radius: 996px;
+  border-radius: calc(999px - 3px);  /* outer - padding */
   background: #0a0a0a;
   overflow: hidden;
-  width: calc(100% - 6px);   /* 3px padding on both sides */
-  margin: 3px;               /* 3px offset */
+  width: 100%;
   aspect-ratio: 2.379 / 1;
   position: relative;
-  /* height: 0; */
- /* padding-bottom: calc((1 / 2.379) * (100% - 6px));*/
+  box-sizing: border-box;
 }
 
 
