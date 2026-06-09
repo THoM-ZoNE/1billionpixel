@@ -12,8 +12,8 @@ const NAV_LINKS = [
 ];
 
 const SOCIAL_LINKS = [
-  { label: "Telegram", href: "https://t.me/1bpfun" },
-  { label: "X",        href: "https://x.com/1bpfun" },
+  { label: "Telegram", href: "https://t.me/1bpxfun" },
+  { label: "X",        href: "https://x.com/1bpxfun" },
 ];
 
 export function Navbar() {
@@ -75,7 +75,7 @@ export function Navbar() {
               textDecoration: "none", letterSpacing: "0.05em",
               flexShrink: 0,
             }}>
-              1BP.FUN
+              1BPX.FUN
             </Link>
 
             {/* Asztali nav */}
