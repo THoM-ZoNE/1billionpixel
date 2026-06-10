@@ -475,7 +475,7 @@ export default function AdminPage() {
   );
 });
 
-  const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+  const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
 
   const authHeaders = {
     "Content-Type": "application/json",
@@ -484,7 +484,7 @@ export default function AdminPage() {
 
   // ── Login ──
   const handleLogin = async () => {
-    const r = await fetch(`${API}/api/admin/login`, {
+    const r = await fetch(`${API}/admin/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
@@ -509,7 +509,7 @@ export default function AdminPage() {
   // ── Auto-auth if there is a saved token ──
   useEffect(() => {
     if (token) {
-      fetch(`${API}/api/admin/wallets`, {
+      fetch(`${API}/admin/wallets`, {
         headers: { Authorization: `Bearer ${token}` },
       }).then(r => {
         if (r.ok) setAuthed(true);
@@ -519,7 +519,7 @@ export default function AdminPage() {
   }, []);
 
   const fetchWallets = useCallback(async () => {
-    const res = await fetch(`${API}/api/admin/wallets`, {
+    const res = await fetch(`${API}/admin/wallets`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (res.ok) {
@@ -535,7 +535,7 @@ export default function AdminPage() {
   }, [token]);
 
   const fetchForbidden = useCallback(async () => {
-    const res = await fetch(`${API}/api/admin/forbidden`, {
+    const res = await fetch(`${API}/admin/forbidden`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (res.ok) setForbiddenZones(await res.json());
@@ -546,7 +546,7 @@ export default function AdminPage() {
   }, [authed, fetchWallets, fetchForbidden]);
 
   const createTestWallet = async () => {
-    await fetch(`${API}/api/admin/test-wallet`, {
+    await fetch(`${API}/admin/test-wallet`, {
       method: "POST",
       headers: authHeaders,
       body: JSON.stringify({
@@ -560,7 +560,7 @@ export default function AdminPage() {
 
   const deleteAllForbidden = async () => {
     if (!confirm("Are you sure you want to delete all Forbidden zones?")) return;
-    await fetch(`${API}/api/admin/forbidden`, {
+    await fetch(`${API}/admin/forbidden`, {
       method: "DELETE",
       headers: authHeaders,
     });
