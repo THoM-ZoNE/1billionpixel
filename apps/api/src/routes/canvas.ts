@@ -128,8 +128,7 @@ const canvasRoutes: FastifyPluginAsync = async (app) => {
         width:  area.width,
         height: area.height,
         areaId: area.id,
-        //imageUrl: area.imageUrl ?? undefined,
-        imageUrl: undefined,
+        imageUrl: area.imageUrl ?? undefined,
         link: fields.link ?? undefined,
       });
         return reply.status(201).send({
