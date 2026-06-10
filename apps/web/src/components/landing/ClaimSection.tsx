@@ -55,6 +55,8 @@ export function ClaimSection() {
   const isPanningRef    = useRef(false);
   const isMoveRef       = useRef(false);
   const moveOffsetRef   = useRef<{ dx: number; dy: number } | null>(null);
+  const lastTouchMidRef = useRef<{ x: number; y: number } | null>(null);
+  const lastTouchDistRef = useRef(0);
 
   // ── State ─────────────────────────────────────────────────────────────────
   const [ratioKey,        setRatioKey]        = useState("16:9");
@@ -467,24 +469,31 @@ export function ClaimSection() {
     setSelection({ ...sel });
   };
 
-  // Touch handlers (basic implementation, can be improved with better multi-touch support)
-  const lastTouchDistRef = useRef(0);
+// ── Touch events ────────────────────────────────────────────────────────────
 
 const onTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+  e.preventDefault();
+
   if (e.touches.length === 2) {
-    // Pinch zoom kezdete
+    // Pinch zoom + pan kezdete
+    draggingRef.current = false;
+    dragStart.current   = null;
     const dx = e.touches[0].clientX - e.touches[1].clientX;
     const dy = e.touches[0].clientY - e.touches[1].clientY;
     lastTouchDistRef.current = Math.sqrt(dx * dx + dy * dy);
+    lastTouchMidRef.current  = {
+      x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+      y: (e.touches[0].clientY + e.touches[1].clientY) / 2,
+    };
     return;
   }
+
   if (e.touches.length !== 1) return;
-  const t = e.touches[0];
+  const t   = e.touches[0];
   const pos = toWorldFromCoords(t.clientX, t.clientY);
   if (!pos) return;
   const sel = selectionRef.current ?? selection;
 
-  // Move selection
   if (sel && pos.wx >= sel.x && pos.wx <= sel.x + sel.w && pos.wy >= sel.y && pos.wy <= sel.y + sel.h) {
     isMoveRef.current     = true;
     draggingRef.current   = true;
@@ -492,8 +501,6 @@ const onTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
     return;
   }
 
-  // Pan (two-finger or space — single touch defaults to draw)
-  // New selection
   isMoveRef.current    = false;
   dragStart.current    = { wx: pos.wx, wy: pos.wy };
   draggingRef.current  = true;
@@ -502,33 +509,55 @@ const onTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
 };
 
 const onTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+  e.preventDefault();
+  const canvas = canvasRef.current; if (!canvas) return;
+  const rect   = canvas.getBoundingClientRect();
+
   if (e.touches.length === 2) {
     // Pinch zoom
-    const dx = e.touches[0].clientX - e.touches[1].clientX;
-    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    const dx   = e.touches[0].clientX - e.touches[1].clientX;
+    const dy   = e.touches[0].clientY - e.touches[1].clientY;
     const dist = Math.sqrt(dx * dx + dy * dy);
+
+    const midClientX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+    const midClientY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+    const midX = (midClientX - rect.left) * (canvas.width  / rect.width);
+    const midY = (midClientY - rect.top)  * (canvas.height / rect.height);
+
+    const { x: px, y: py, scale: ps } = vtRef.current;
+
+    // Zoom a két ujj középpontja körül
+    let newVt = { x: px, y: py, scale: ps };
     if (lastTouchDistRef.current > 0) {
-      const canvas = canvasRef.current; if (!canvas) return;
-      const rect = canvas.getBoundingClientRect();
-      const factor = dist / lastTouchDistRef.current;
-      const midX = ((e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left) * (canvas.width / rect.width);
-      const midY = ((e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top)  * (canvas.height / rect.height);
-      const { x: px, y: py, scale: ps } = vtRef.current;
+      const factor   = dist / lastTouchDistRef.current;
       const newScale = Math.max(0.5, Math.min(20, ps * factor));
-      vtRef.current = {
-        x: midX - (midX - px) * (newScale / ps),
-        y: midY - (midY - py) * (newScale / ps),
+      newVt = {
+        x:     midX - (midX - px) * (newScale / ps),
+        y:     midY - (midY - py) * (newScale / ps),
         scale: newScale,
       };
-      setZoomDisplay(newScale);
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      rafRef.current = requestAnimationFrame(() => draw());
     }
+
+    // Pan: a két ujj középpontjának elmozdulása
+    if (lastTouchMidRef.current) {
+      const dmx = (midClientX - lastTouchMidRef.current.x) * (canvas.width  / rect.width);
+      const dmy = (midClientY - lastTouchMidRef.current.y) * (canvas.height / rect.height);
+      newVt.x += dmx;
+      newVt.y += dmy;
+    }
+
+    vtRef.current = newVt;
+    setZoomDisplay(newVt.scale);
     lastTouchDistRef.current = dist;
+    lastTouchMidRef.current  = { x: midClientX, y: midClientY };
+
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(() => draw());
     return;
   }
+
   if (e.touches.length !== 1 || !draggingRef.current) return;
-  const t = e.touches[0];
+  const t   = e.touches[0];
   const pos = toWorldFromCoords(t.clientX, t.clientY);
   if (!pos) return;
 
@@ -548,12 +577,16 @@ const onTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
       w, h,
     };
   }
+
   if (rafRef.current) cancelAnimationFrame(rafRef.current);
   rafRef.current = requestAnimationFrame(() => draw());
 };
 
 const onTouchEnd = (e: React.TouchEvent<HTMLCanvasElement>) => {
-  if (e.touches.length < 2) lastTouchDistRef.current = 0;
+  if (e.touches.length < 2) {
+    lastTouchDistRef.current = 0;
+    lastTouchMidRef.current  = null;
+  }
   if (e.touches.length > 0) return;
   draggingRef.current   = false;
   isMoveRef.current     = false;

@@ -216,7 +216,7 @@ button:focus-visible {
 }
 
 .statsbar {
-  width: 100%;
+  width: calc(100% - 2rem);
   border-radius: 1rem;
   border: 1px solid rgba(124, 58, 237, 0.4);
   background: rgba(0, 0, 0, 0.7);
@@ -273,13 +273,29 @@ button:focus-visible {
 }
 
 @media (max-width: 640px) {
+  .statsbar {
+    width: calc(100% - 2rem);
+    margin-inline: auto;
+    padding: 1rem;
+    border-radius: 0.875rem;
+  }
+
   .statsbar-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1.25rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.875rem;
   }
 
   .statsbar-value {
-    font-size: 1.2rem;
+    font-size: 1rem;
+  }
+
+  .statsbar-label {
+    font-size: 0.58rem;
+    letter-spacing: 0.04em;
+  }
+  .statsbar,
+  .statsbar * {
+    min-width: 0;
   }
 }
 

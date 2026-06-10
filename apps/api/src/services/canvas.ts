@@ -71,7 +71,15 @@ export async function getCanvasStats() {
       where: { status: "ACTIVE" },
       _sum: { pixelCount: true },
     }),
-    prisma.wallet.count(),
+    prisma.wallet.count({
+  where: {
+    areas: {
+      some: {
+        status: { in: ["ACTIVE", "AT_RISK"] },
+      },
+    },
+  },
+}),
   ]);
 
   const claimed = Number(totalClaimed._sum.pixelCount ?? 0);

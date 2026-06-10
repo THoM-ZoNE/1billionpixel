@@ -7,6 +7,7 @@ import {
   sendAreaAvailableToGroup,    
   sendModerationNotification,  
 } from "../services/telegram.js";
+import { deleteImageLocally } from "../services/storage.js";
 
 const JWT_SECRET = process.env.JWT_SECRET ?? "jwt_titkos_kulcs";
 
@@ -163,6 +164,7 @@ protectedApp.delete<{ Params: { id: string } }>("/areas/:id", async (req, reply)
       },
     }),
   ]);
+  await deleteImageLocally(area.imageKey);
   if (area.status !== "RELEASED") {
     await sendAreaAvailableToGroup({
       x: area.x, y: area.y,
@@ -290,6 +292,7 @@ protectedApp.post<{
       if (area.wallet.telegramHandle) {
       await sendModerationNotification(area.wallet.telegramHandle, area.walletAddress, "warn");
     }
+    await deleteImageLocally(area.imageKey);
     if (area.status !== "RELEASED") {
   await sendAreaAvailableToGroup({
     x: area.x, y: area.y,
@@ -317,6 +320,7 @@ protectedApp.post<{
       if (area.wallet.telegramHandle) {
       await sendModerationNotification(area.wallet.telegramHandle, area.walletAddress, "punish");
     }
+    await deleteImageLocally(area.imageKey);
     if (area.status !== "RELEASED") {
   await sendAreaAvailableToGroup({
     x: area.x, y: area.y,
@@ -342,6 +346,7 @@ protectedApp.post<{
       if (area.wallet.telegramHandle) {
       await sendModerationNotification(area.wallet.telegramHandle, area.walletAddress, "ban");
     }
+    await deleteImageLocally(area.imageKey);
     if (area.status !== "RELEASED") {
   await sendAreaAvailableToGroup({
     x: area.x, y: area.y,
