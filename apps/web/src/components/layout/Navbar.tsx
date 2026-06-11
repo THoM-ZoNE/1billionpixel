@@ -86,10 +86,21 @@ export function Navbar() {
               className="hide-mobile"
             >
               {NAV_LINKS.map(({ label, href }) => (
-                <Link key={href} href={href} style={linkStyle(href)}>
-                  {label}
-                </Link>
-              ))}
+  <Link key={href} href={href} style={linkStyle(href)}>
+    <span style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+      {href === "/canvas/live" && pathname === "/canvas/live" && (
+        <span style={{
+          width: 6, height: 6, borderRadius: "50%",
+          background: "#14f195",
+          boxShadow: "0 0 6px #14f195",
+          display: "inline-block",
+          animation: "pulse-dot 1.5s ease-in-out infinite",
+        }} />
+      )}
+      {label}
+    </span>
+  </Link>
+))}
 
               {divider}
 
@@ -166,7 +177,18 @@ export function Navbar() {
               onClick={() => setMenuOpen(false)}
               style={{ ...linkStyle(href), fontSize: "0.9rem" }}
             >
+            <span style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+      {href === "/canvas/live" && pathname === "/canvas/live" && (
+        <span style={{
+          width: 6, height: 6, borderRadius: "50%",
+          background: "#14f195",
+          boxShadow: "0 0 6px #14f195",
+          display: "inline-block",
+          animation: "pulse-dot 1.5s ease-in-out infinite",
+        }} />
+        )}  
               {label}
+              </span>
             </Link>
           ))}
           <div style={{ height: 1, background: "rgba(255,255,255,0.08)" }} />

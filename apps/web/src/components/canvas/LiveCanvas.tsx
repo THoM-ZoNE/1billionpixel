@@ -606,18 +606,6 @@ const stopZoom = () => {
   const zp = Math.round(zoom * 100);
   return (
     <div style={{ minHeight: "100dvh", background: "#060a06", overflow: "hidden", display: "flex", flexDirection: "column" }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1.5rem 1.5rem", borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(6,10,6,1)", position: "sticky", top: 0, zIndex: 100 }}>
-        <a href="/" style={{ fontFamily: "monospace", fontSize: "0.85rem", color: "#14f195", textDecoration: "none", letterSpacing: "0.15em" }}>{"← 1BPX.FUN"}</a>
-        <div style={{ display: "flex", alignItems: "center", gap: "1.5rem" }}>
-          <span style={{ fontSize: "0.65rem", color: "rgba(20,241,149,0.7)", fontFamily: "monospace", display: "flex", alignItems: "center", gap: "0.4rem" }}>
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#14f195", display: "inline-block", boxShadow: "0 0 6px #14f195" }}></span>
-            LIVE
-          </span>
-          <span style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.4)", fontFamily: "monospace" }}>{zp}%</span>
-        </div>
-      </div>
-
       {/* Canvas area */}
 <div style={{
   flex: 1,

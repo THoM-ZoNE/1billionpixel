@@ -307,3 +307,8 @@ button:focus-visible {
   .hide-mobile { display: none !important; }
   .show-mobile { display: flex !important; }
 }
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; box-shadow: 0 0 6px #14f195; }
+  50%       { opacity: 0.4; box-shadow: 0 0 2px #14f195; }
+}

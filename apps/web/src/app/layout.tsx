@@ -22,6 +22,12 @@ const pixelify = Pixelify_Sans({
   subsets: ["latin"],
   variable: "--font-pixelify",
 });
+
+const ContractTicker = dynamic(
+  () => import("@/components/layout/ContractTicker").then(m => m.ContractTicker),
+  { ssr: false }
+);
+
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${pressStart.variable} ${pixelify.variable}`}>
@@ -50,7 +56,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body className="bg-canvas-bg text-white antialiased">
         <Providers>
           <Navbar />
+          <ContractTicker />
+          <div style={{ paddingTop: "83px" }}>
           {children}
+        </div>
         </Providers>
       </body>
     </html>
