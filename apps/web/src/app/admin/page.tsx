@@ -8,6 +8,7 @@ type WalletRow = {
   address: string;
   telegramHandle: string | null;
   totalQuota: number;
+  availableQuota: number;
   bonusPixels: number;  
   penaltyPixels: number;
   manualOverride: boolean;
@@ -220,7 +221,8 @@ const resetOverride = async (address: string) => {
       <thead>
         <tr style={{ borderBottom: "1px solid #333" }}>
           <th style={{ textAlign: "left", padding: "6px 8px" }}>Address</th>
-          <th style={{ padding: "6px 8px" }}>Quota</th>
+          <th style={{ padding: "6px 8px" }}>Token</th>
+          <th style={{ padding: "6px 8px" }}>Available</th>
           <th style={{ padding: "6px 8px" }}>Skip Sign</th>
           <th style={{ padding: "6px 8px" }}>Areas</th>
           <th style={{ padding: "6px 8px" }}>Set quota</th>
@@ -244,7 +246,11 @@ const resetOverride = async (address: string) => {
               <td style={{ textAlign: "center", padding: "6px 8px" }}>
                 {((w.totalQuota ?? 0).toLocaleString())}
               </td>
-
+              <td style={{ textAlign: "center", padding: "6px 8px" }}>
+              <span style={{ color: w.availableQuota > 0 ? "#14f195" : "#666" }}>
+                {(w.availableQuota ?? 0).toLocaleString()}
+              </span>
+            </td>
               {/* Skip Signature toggle */}
               <td style={{ textAlign: "center", padding: "6px 8px" }}>
                 <button
@@ -353,7 +359,7 @@ const resetOverride = async (address: string) => {
             {expanded === w.address && (
               <tr key={`${w.address}-areas`}>
                 <td
-                  colSpan={8}
+                  colSpan={9}
                   style={{ background: "#1a1a1a", padding: "8px 16px" }}
                 >
                   {w.areas.length === 0 ? (
@@ -527,6 +533,7 @@ export default function AdminPage() {
     setWallets(data.map((w: any) => ({
       ...w,
       totalQuota: Number(w.totalQuota ?? 0),
+      availableQuota: Number(w.availableQuota ?? 0),
       bonusPixels:   Number(w.bonusPixels   ?? 0),
       penaltyPixels: Number(w.penaltyPixels ?? 0),
       manualOverride: w.manualOverride ?? false,

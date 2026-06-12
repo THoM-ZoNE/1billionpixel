@@ -69,7 +69,10 @@ const adminRoutes: FastifyPluginAsync = async (app) => {
       return wallets.map(w => ({
         ...w,
         totalQuota: Number(w.totalQuota),
+        availableQuota: Number(w.availableQuota),
         lockedPixels: Number(w.lockedPixels),
+        bonusPixels:    Number(w.bonusPixels),
+        penaltyPixels:  Number(w.penaltyPixels),
       }));
     });
 
