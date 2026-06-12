@@ -54,34 +54,25 @@ export const syncWalletBalance = async (address: string) => {
       manualOverride: true,
       bannedAt:       true,   // ← ÚJ
       penaltyPixels:  true,   // ← ÚJ
-      bonusPixels:    true,   // ← ÚJ
+      bonusPixels:    true,
+      lockedPixels:   true,   // ← ÚJ
     },
   });
 
   // Bannolt wallet ne frissüljön
   if (existing?.bannedAt) return;
 
-  const activeAreas = await prisma.pixelArea.findMany({
-    where: {
-      walletAddress: address,
-      status: { in: ["ACTIVE", "AT_RISK"] },
-    },
-    select: { pixelCount: true },
-  });
 
-  const lockedPixels = activeAreas.reduce(
-    (sum, a) => sum + BigInt(a.pixelCount.toString()),
-    0n
-  );
 
   // ← MÓDOSÍTOTT: penalty és bonus figyelembevétele
   const penalty = existing?.penaltyPixels ?? 0n;
   const bonus   = existing?.bonusPixels   ?? 0n;
-  const rawQuota = onChain + bonus - penalty - lockedPixels;
+  const locked  = existing?.lockedPixels  ?? 0n;
+  const rawQuota = onChain + bonus - penalty - (existing?.lockedPixels ?? 0n);
   const availableQuota = rawQuota > 0n ? rawQuota : 0n;
 
   console.log(
-    `[sync:${short}] onChain=${onChain} | locked=${lockedPixels} | penalty=${penalty} | bonus=${bonus} | available=${availableQuota}`
+    `[sync:${short}] onChain=${onChain} | locked=${locked} | penalty=${penalty} | bonus=${bonus} | available=${availableQuota}`
   );
 
   const wallet = await prisma.wallet.upsert({
@@ -98,7 +89,6 @@ export const syncWalletBalance = async (address: string) => {
       ? { lastSynced: new Date() }
       : {
           totalQuota:    onChain,
-          lockedPixels,
           availableQuota,
           lastSynced: new Date(),
           // penaltyPixels és bonusPixels itt NEM szerepel —
@@ -109,7 +99,7 @@ export const syncWalletBalance = async (address: string) => {
   return {
     ...wallet,
     totalQuota: onChain.toString(),
-    lockedPixels: lockedPixels.toString(),
+    lockedPixels: locked.toString(),
     availableQuota: availableQuota.toString(),
   };
 };

@@ -43,7 +43,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <link rel="manifest" href="/site.webmanifest" />
         <meta property="og:image" content="/og-image.png" />
         <meta property="og:title" content="1BillionPixel.fun" />
-        <meta property="og:description" content="Own your piece of the Billion Pixel Canvas" />
+        <meta property="og:description" content="Own a pixel of PumpFun history" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:image" content="/og-image.png" />
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"></meta>
