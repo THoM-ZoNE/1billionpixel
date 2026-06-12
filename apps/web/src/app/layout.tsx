@@ -57,9 +57,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <Providers>
           <Navbar />
           <ContractTicker />
-          <div style={{ paddingTop: "83px" }}>
           {children}
-        </div>
         </Providers>
       </body>
     </html>
