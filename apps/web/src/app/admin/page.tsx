@@ -129,7 +129,7 @@ function WalletTable({
 
   const deleteArea = async (areaId: string) => {
     if (!confirm("Are you sure you want to delete this area and image?")) return;
-    await fetch(`${apiUrl}/api/admin/areas/${areaId}`, {
+    await fetch(`${apiUrl}/admin/areas/${areaId}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${token}` },
     });
