@@ -207,7 +207,7 @@ export async function sendNewClaimToGroup(params: {
   const pixels = (width * height).toLocaleString();
   const shortWallet = `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`;
 
-  const focusUrl = `https://1billionpixel.fun/canvas/live?area=${areaId}`;
+  const focusUrl = `https://1bpx.fun/canvas/live?area=${areaId}`;
 
   const caption =
     `🖼 <b>New Pixel Claim!</b>\n\n` +
@@ -215,31 +215,32 @@ export async function sendNewClaimToGroup(params: {
     `📐 Size: <b>${width}×${height}</b> = <b>${pixels} px</b>\n` +
     `📍 Position: (${x}, ${y})\n` +
     (link ? `🔗 <a href="${link}">${link}</a>\n` : "") +
-    `\n👉 <a href="${focusUrl}">View on canvas →</a>`;
+    `\n👉 <a href="${focusUrl}">View on 1BillionPixel.fun →</a>`;
 
-  // If imageUrl is provided → sendPhoto (inline preview), otherwise sendMessage
   if (imageUrl) {
     try {
-      const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN!}/sendPhoto`, {
+      const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          chat_id: GROUP_ID!,
+          chat_id: GROUP_ID,
           photo: imageUrl,
           caption,
           parse_mode: "HTML",
         }),
       });
       const data = await res.json();
-      if (!data.ok) console.warn("[Telegram] sendPhoto failed:", data.description);
+      if (!data.ok) {
+        console.warn("[Telegram] sendPhoto failed:", data.description, "→ falling back to text");
+        return sendMessage(GROUP_ID, caption);
+      }
       return data.ok;
     } catch (err) {
       console.error("[Telegram] sendPhoto error:", err);
-      return false;
+      return sendMessage(GROUP_ID, caption);
     }
   }
 
   // Fallback: no image → standard text message
-  return sendMessage(GROUP_ID!, caption);
-  
+  return sendMessage(GROUP_ID, caption);
 }
