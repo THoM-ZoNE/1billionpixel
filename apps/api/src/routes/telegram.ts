@@ -31,6 +31,28 @@ const telegramRoutes: FastifyPluginAsync = async (app) => {
     }
   );
 
+  // POST /api/telegram/webhook
+app.post<{ Body: any }>("/webhook", async (req, reply) => {
+  const update = req.body as { message?: any; callback_query?: any };
+  const message = update?.message;
+  
+  if (message?.text?.startsWith("/start") && message?.chat?.type === "private") {
+    const chatId = String(message.chat.id);
+    const username = message.from?.username?.toLowerCase();
+    
+    if (username) {
+      await prisma.telegramVerification.upsert({
+        where: { handle: username },
+        update: { chatId },
+        create: { handle: username, chatId, verifiedAt: new Date() },
+      });
+      console.log(`[Telegram] Saved chatId ${chatId} for @${username}`);
+    }
+  }
+  
+  return reply.send({ ok: true });
+});
+
 };
 
 export { telegramRoutes };
