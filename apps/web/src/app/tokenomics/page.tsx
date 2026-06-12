@@ -146,7 +146,7 @@ export default function TokenomicsPage() {
         </p>
         <p style={bodyStyle}>
             If the resulting area would fall below{" "}
-            <span style={{ color: "#f87171" }}>10 × 10 pixels</span>, the claim
+            <span style={{ color: "#f87171" }}>100 × 100 pixels</span>, the claim
             is fully released instead of shrunk — to keep the canvas clean and
             free of unusable micro-fragments.
         </p>

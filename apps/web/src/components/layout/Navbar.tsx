@@ -12,8 +12,8 @@ const NAV_LINKS = [
 ];
 
 const SOCIAL_LINKS = [
-  { label: "Telegram", href: "https://t.me/1bpxfun" },
-  { label: "X",        href: "https://x.com/1bpxfun" },
+  { label: "Telegram", href: "https://t.me/onebillionpixel" },
+  { label: "X",        href: "https://x.com/1BPiXel" },
 ];
 
 export function Navbar() {

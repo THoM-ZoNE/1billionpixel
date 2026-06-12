@@ -114,7 +114,7 @@ function WalletTable({
 
   const toggleSkipSig = async (address: string, current: boolean) => {
     await fetch(
-      `${apiUrl}/api/admin/wallets/${encodeURIComponent(address)}/skipSignature`,
+      `${apiUrl}/admin/wallets/${encodeURIComponent(address)}/skipSignature`,
       {
         method: "PATCH",
         headers: {
@@ -148,7 +148,7 @@ const moderateArea = async (areaId: string, walletAddress: string, violationCoun
   );
   if (!action || !["warn", "punish", "ban"].includes(action)) return;
 
-  const res = await fetch(`${apiUrl}/api/admin/moderate`, {
+  const res = await fetch(`${apiUrl}/admin/moderate`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({ areaId, action }),
@@ -160,7 +160,7 @@ const moderateArea = async (areaId: string, walletAddress: string, violationCoun
 
 const unbanWallet = async (address: string) => {
   if (!confirm(`Unban wallet ${address.slice(0, 8)}...?`)) return;
-  await fetch(`${apiUrl}/api/admin/wallets/${encodeURIComponent(address)}/unban`, {
+  await fetch(`${apiUrl}/admin/wallets/${encodeURIComponent(address)}/unban`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -169,7 +169,7 @@ const unbanWallet = async (address: string) => {
 
   const updateQuota = async (address: string, quota: number) => {
     await fetch(
-      `${apiUrl}/api/admin/wallets/${encodeURIComponent(address)}/quota`,
+      `${apiUrl}/admin/wallets/${encodeURIComponent(address)}/quota`,
       {
         method: "PATCH",
         headers: {
@@ -192,7 +192,7 @@ const unbanWallet = async (address: string) => {
   const reason = window.prompt("Reason (optional, sent in DM):", "") ?? "";
 
   const res = await fetch(
-    `${apiUrl}/api/admin/wallets/${encodeURIComponent(address)}/bonus`,
+    `${apiUrl}/admin/wallets/${encodeURIComponent(address)}/bonus`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -205,7 +205,7 @@ const unbanWallet = async (address: string) => {
 };
 const resetOverride = async (address: string) => {
   const res = await fetch(
-    `${apiUrl}/api/admin/wallets/${encodeURIComponent(address)}/reset-override`,
+    `${apiUrl}/admin/wallets/${encodeURIComponent(address)}/reset-override`,
     {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
