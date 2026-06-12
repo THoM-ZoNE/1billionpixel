@@ -27,20 +27,20 @@ const walletRoutes: FastifyPluginAsync = async (app) => {
     // Important: BigInt fields must be converted to strings (JSON.stringify cannot handle BigInt)
     // availableQuota is always computed on-the-fly: totalQuota - lockedPixels
     // This avoids drift between stored DB values and reality
-    const effectiveAvailable = existing.totalQuota >= existing.lockedPixels
-      ? existing.totalQuota - existing.lockedPixels
-      : 0n;
-    return reply.send({
-      address:         existing.address,
-      totalQuota:      existing.totalQuota.toString(),
-      lockedPixels:    existing.lockedPixels.toString(),
-      availableQuota:  effectiveAvailable.toString(),
-      gracePeriodEnd:  existing.gracePeriodEnd,
-      lastSynced:      existing.lastSynced,
-      createdAt:       existing.createdAt,
-      manualOverride:  existing.manualOverride,
-      skipSignature:   existing.skipSignature,
-    });
+    const effectiveAvailable = existing.availableQuota > 0n ? existing.availableQuota : 0n;
+
+return reply.send({
+  address:         existing.address,
+  totalQuota:      existing.totalQuota.toString(),
+  lockedPixels:    existing.lockedPixels.toString(),
+  availableQuota:  effectiveAvailable.toString(),
+  bonusPixels:     existing.bonusPixels.toString(),   // ← hasznos a frontennek
+  gracePeriodEnd:  existing.gracePeriodEnd,
+  lastSynced:      existing.lastSynced,
+  createdAt:       existing.createdAt,
+  manualOverride:  existing.manualOverride,
+  skipSignature:   existing.skipSignature,
+});
   });
 
   // POST /api/wallet/connect  — wallet connect + sign verification
