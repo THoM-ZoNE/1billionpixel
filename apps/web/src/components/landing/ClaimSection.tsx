@@ -293,7 +293,7 @@ export function ClaimSection() {
       const cy = (e.clientY - rect.top)  * (canvas.height / rect.height);
       const { x: px, y: py, scale: ps } = vtRef.current;
       const factor   = e.deltaY > 0 ? 0.9 : 1.1;
-      const newScale = Math.max(0.9, Math.min(20, ps * factor));
+      const newScale = Math.max(0.9, Math.min(30, ps * factor));
       vtRef.current  = { x: cx - (cx - px) * (newScale / ps), y: cy - (cy - py) * (newScale / ps), scale: newScale };
       setZoomDisplay(newScale);
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -530,7 +530,7 @@ const onTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
     let newVt = { x: px, y: py, scale: ps };
     if (lastTouchDistRef.current > 0) {
       const factor   = dist / lastTouchDistRef.current;
-      const newScale = Math.max(0.5, Math.min(20, ps * factor));
+      const newScale = Math.max(0.5, Math.min(30, ps * factor));
       newVt = {
         x:     midX - (midX - px) * (newScale / ps),
         y:     midY - (midY - py) * (newScale / ps),

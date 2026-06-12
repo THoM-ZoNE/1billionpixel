@@ -358,7 +358,7 @@ const newH = Math.round(newW / WORLD_RATIO);
 
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
     const oldZ  = zoomRef.current;
-    const newZ  = Math.min(20, Math.max(0.95, oldZ * delta));
+    const newZ  = Math.min(30, Math.max(0.95, oldZ * delta));
 
     // Zoom around cursor: the point under the cursor remains fixed
     const rawX = mouseX - (mouseX - offsetRef.current.x) * (newZ / oldZ);
@@ -480,7 +480,7 @@ const onTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
     if (lastTouchDistRef.current > 0) {
       const scale = dist / lastTouchDistRef.current;
       const oldZ = zoomRef.current;
-      const newZ = Math.min(20, Math.max(0.95, oldZ * scale));
+      const newZ = Math.min(30, Math.max(0.95, oldZ * scale));
       // Zoom around the midpoint of the two fingers
       const midX = ((e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left) * (canvas.width / rect.width);
       const midY = ((e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top) * (canvas.height / rect.height);
@@ -584,13 +584,13 @@ const zoomAroundCenter = useCallback((newZ: number) => {
 const startZoom = (direction: 1 | -1) => {
   // One immediate step
   zoomAroundCenter(direction === 1
-    ? Math.min(20, zoomRef.current * 1.1)
+    ? Math.min(30, zoomRef.current * 1.1)
     : Math.max(0.95, zoomRef.current * 0.9)
   );
   // Then continuously
   zoomIntervalRef.current = setInterval(() => {
     zoomAroundCenter(direction === 1
-      ? Math.min(20, zoomRef.current * 1.1)
+      ? Math.min(30, zoomRef.current * 1.1)
       : Math.max(0.95, zoomRef.current * 0.9)
     );
   }, 150); // ms — you can adjust this
