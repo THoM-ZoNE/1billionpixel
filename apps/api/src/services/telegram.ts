@@ -134,14 +134,14 @@ export async function sendAreaAvailableToGroup(params: {
 
   const { x, y, width, height } = params;
   const pixels = (width * height).toLocaleString();
-  const canvasUrl = `https://1billionpixel.fun/canvas/live`;
+  const canvasUrl = `https://1billionpixel.fun/`;
 
   const msg =
     `🟢 <b>New Area Available!</b>\n\n` +
     `📐 Size: <b>${width}×${height}</b> = <b>${pixels} px</b>\n` +
     `📍 Position: (${x}, ${y})\n\n` +
     `A pixel area has just been released — grab it before someone else does!\n\n` +
-    `👉 <a href="${canvasUrl}">Claim on 1BillionPixel →</a>`;
+    `👉 <a href="${canvasUrl}">Claim now on 1BillionPixel.fun →</a>`;
 
   return sendMessage(GROUP_ID!, msg);
 }
