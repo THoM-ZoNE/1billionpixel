@@ -9,11 +9,12 @@ const NAV_LINKS = [
   { label: "Live Canvas",  href: "/canvas/live" },
   { label: "Tokenomics",   href: "/tokenomics" },
   { label: "FAQ",          href: "/faq" },
+  { label: "WhitePaper",   href: "/whitepaper" },
 ];
 
 const SOCIAL_LINKS = [
   { label: "Telegram", href: "https://t.me/onebillionpixel" },
-  { label: "X",        href: "https://x.com/1BPiXel" },
+  { label: "X",        href: "https://x.com/BillionPixelFun" },
 ];
 
 export function Navbar() {

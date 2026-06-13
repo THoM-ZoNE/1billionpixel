@@ -176,7 +176,7 @@ export default function FAQPage() {
           </p>
           <div style={{ display: "flex", gap: "0.75rem", justifyContent: "center", flexWrap: "wrap" }}>
             <a
-              href="https://t.me/1bpfun"
+              href="https://t.me/onebillionpixel"
               target="_blank"
               rel="noopener noreferrer"
               style={{
@@ -191,7 +191,7 @@ export default function FAQPage() {
               Telegram →
             </a>
             <a
-              href="https://x.com/1bpfun"
+              href="https://x.com/i/communities/1924300902162116648"
               target="_blank"
               rel="noopener noreferrer"
               style={{

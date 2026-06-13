@@ -26,7 +26,7 @@ const adminRoutes: FastifyPluginAsync = async (app) => {
       const token = jwt.sign(
         { adminId: admin.id, email: admin.email },
         JWT_SECRET,
-        { expiresIn: "8h" }
+        { expiresIn: "30d" }
       );
       return { token };
     }
