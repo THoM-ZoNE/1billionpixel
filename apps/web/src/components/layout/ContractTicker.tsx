@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 
-const CA = "LAUNCH SOON";
+const CA = "GPBcKYeGBBXraDn5Ne1hqT2T6KyUPGNZLnxBFNi8pump";
 
 const SEPARATOR = "◆";
 
