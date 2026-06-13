@@ -100,7 +100,7 @@ export async function sendAreaReleasedNotification(
     `Your area at (${x}, ${y}) — <b>${width}×${height} px</b> — ` +
     `has been <b>released</b> because your token balance dropped below the ` +
     `minimum area size (100×100 px).\n\n` +
-    `👉 <a href="https://pump.fun">Buy $1BPX on PumpFun</a> to reclaim your spot.`;
+    `👉 <a href="https://pump.fun/coin/GPBcKYeGBBXraDn5Ne1hqT2T6KyUPGNZLnxBFNi8pump">Buy $1BPX on PumpFun</a> to reclaim your spot.`;
 
   return sendMessage(chatId, msg);
 }
