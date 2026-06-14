@@ -179,14 +179,33 @@ protectedApp.delete<{ Params: { id: string } }>("/areas/:id", async (req, reply)
 
     // PATCH /admin/areas/:id/status
     protectedApp.patch<{ Params: { id: string }; Body: { status: string } }>(
-      "/areas/:id/status",
-      async (req) => {
-        return prisma.pixelArea.update({
-          where: { id: req.params.id },
-          data: { status: req.body.status as any },
-        });
-      }
-    );
+  "/areas/:id/status",
+  async (req) => {
+    const area = await prisma.pixelArea.findUnique({
+      where: { id: req.params.id },
+    });
+    if (!area) return { error: "Not found" };
+
+    const updated = await prisma.pixelArea.update({
+      where: { id: req.params.id },
+      data: { status: req.body.status as any },
+    });
+
+    // Ha RELEASED-re vált → lockedPixels visszaállítás
+    if (req.body.status === "RELEASED" && area.status !== "RELEASED") {
+      await prisma.wallet.update({
+        where: { address: area.walletAddress },
+        data: {
+          lockedPixels:   { decrement: area.pixelCount },
+          availableQuota: { increment: area.pixelCount },
+          atRiskSince:    null,
+        },
+      });
+    }
+
+    return updated;
+  }
+);
 
     protectedApp.get("/forbidden", async () => {
   return prisma.pixelArea.findMany({
@@ -383,6 +402,72 @@ protectedApp.post<{ Params: { address: string } }>(
     return wallet;
   }
 );
+// POST /admin/cleanup-orphaned-areas
+// Törli azokat a területeket ahol nincs érvényes quota (totalQuota = 0)
+// vagy a terület kisebb mint 100x100
+protectedApp.post("/cleanup-orphaned-areas", async () => {
+  // 1. RELEASED státuszú területek ahol a wallet-nek nincs quotája
+  const orphaned = await prisma.pixelArea.findMany({
+    where: {
+      OR: [
+        { status: "RELEASED" },
+        {
+          wallet: {
+            totalQuota: 0,
+            bonusPixels: 0,
+          },
+        },
+        {
+          width: { lt: 100 },
+        },
+        {
+          height: { lt: 100 },
+        },
+      ],
+    },
+    include: { wallet: true },
+  });
+
+  if (orphaned.length === 0) return { deleted: 0, areas: [] };
+
+  // 2. Quota visszaállítás per wallet
+  const quotaMap = new Map<string, bigint>();
+  for (const a of orphaned) {
+    quotaMap.set(a.walletAddress, (quotaMap.get(a.walletAddress) ?? 0n) + a.pixelCount);
+  }
+
+  // 3. Transaction: delete + quota restore
+  await prisma.$transaction([
+    prisma.pixelArea.deleteMany({
+      where: { id: { in: orphaned.map((a) => a.id) } },
+    }),
+    ...Array.from(quotaMap.entries()).map(([address, pixels]) =>
+      prisma.wallet.update({
+        where: { address },
+        data: {
+          lockedPixels: { decrement: pixels },
+          availableQuota: { increment: pixels },
+          atRiskSince: null,
+        },
+      })
+    ),
+  ]);
+
+  // 4. Delete images locally
+  for (const a of orphaned) {
+    if (a.imageKey) await deleteImageLocally(a.imageKey);
+  }
+
+  return {
+    deleted: orphaned.length,
+    areas: orphaned.map((a) => ({
+      id: a.id,
+      walletAddress: a.walletAddress,
+      status: a.status,
+      pixels: Number(a.pixelCount),
+    })),
+  };
+});
   });
 };
 
