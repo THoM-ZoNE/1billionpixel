@@ -27,7 +27,7 @@ async function main() {
   const app = Fastify({ logger: true });
 
   await app.register(cors,      { origin: process.env.FRONTEND_URL ?? "*" });
-  await app.register(rateLimit, { max: 100, timeWindow: "1 minute" });
+  await app.register(rateLimit, { global: false, max: 100, timeWindow: "1 minute", keyGenerator: (req) => req.headers["x-forwarded-for"]?.toString() ?? req.ip, });
   await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
   await app.register(websocket);
 

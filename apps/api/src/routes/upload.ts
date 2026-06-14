@@ -8,7 +8,19 @@ import { ALLOWED_MIME_TYPES } from "@1bp/shared";
 
 const uploadRoutes: FastifyPluginAsync = async (app) => {
 
-  app.post<{ Params: { areaId: string } }>("/:areaId", async (req, reply) => {
+  app.post<{ Params: { areaId: string } }>("/:areaId", {
+    config: {
+      rateLimit: {
+        max: 10,
+        timeWindow: "1 minute",
+        errorResponseBuilder: () => ({
+          statusCode: 429,
+          error: "Too Many Requests",
+          message: "Max 10 uploads per minute.",
+        }),
+      },
+    },
+  }, async (req, reply) => {
 
     // ── 1. Multipart mezők kiolvasása ────────────────────────────────────────
     const parts = req.parts();
@@ -31,7 +43,7 @@ const uploadRoutes: FastifyPluginAsync = async (app) => {
     if (!file)          return reply.status(400).send({ error: "No file provided" });
     if (!walletAddress) return reply.status(400).send({ error: "walletAddress required" });
 
-    // ── 3. Wallet lekérés (itt már van walletAddress!) ───────────────────────
+    // ── 3. Wallet lekérés ────────────────────────────────────────────────────
     const wallet = await prisma.wallet.findUnique({ where: { address: walletAddress } });
     if (!wallet) return reply.status(403).send({ error: "Wallet not found" });
 
@@ -78,7 +90,8 @@ const uploadRoutes: FastifyPluginAsync = async (app) => {
     });
 
     return reply.send({ ok: true, imageUrl });
-  });
+  });  // ← csak egyszer zárul
+
 };
 
 export { uploadRoutes };

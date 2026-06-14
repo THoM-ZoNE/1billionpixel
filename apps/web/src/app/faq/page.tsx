@@ -23,9 +23,15 @@ const FAQS = [
     a: "When your token balance no longer covers your full claimed area, the system scales your image down proportionally, anchored to its top-left corner. The freed space on the right and bottom becomes immediately available for others to claim. Your image stays intact — it just gets smaller.",
   },
   {
-    q: "Why do I need to connect Telegram?",
-    a: "Telegram is used for AT_RISK alerts and bot-side wallet verification. Without a connected Telegram account, you won't receive notifications when your area is at risk of being shrunk or released.",
-  },
+  q: "Is my Telegram handle stored? (Data Notice)",
+  a: `If you voluntarily provide your Telegram username on the canvas page, it is stored in our database solely to send you quota alerts and notifications related to your pixel areas.
+
+• The data is never shared with third parties.
+• It is not required to use the platform.
+• It can be removed at any time by clearing the field or contacting us at support@1bpx.fun.
+
+Storage of this data is based on your explicit consent (GDPR Art. 6(1)(a)). Future platform features may require a linked Telegram account — you will be notified in advance of any such changes.`,
+},
   {
     q: "Can I move my claimed area after claiming?",
     a: "No. Once a claim is confirmed, the position is fixed. You can update the image displayed in your area, but the location on the canvas does not change.",

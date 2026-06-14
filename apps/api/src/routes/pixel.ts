@@ -44,7 +44,21 @@ const ClaimSchema = z.object({
 });
 
 const pixelRoutes: FastifyPluginAsync = async (app) => {
-  app.post("/claim", async (req, reply) => {
+
+  // POST /api/pixel/claim — max 5 claim/min/IP
+  app.post("/claim", {
+    config: {
+      rateLimit: {
+        max: 5,
+        timeWindow: "1 minute",
+        errorResponseBuilder: () => ({
+          statusCode: 429,
+          error: "Too Many Requests",
+          message: "Max 5 claims per minute.",
+        }),
+      },
+    },
+  }, async (req, reply) => {
     const body = ClaimSchema.parse(req.body);
 
     // 0. Hard backend geometry validation
@@ -80,7 +94,7 @@ const pixelRoutes: FastifyPluginAsync = async (app) => {
 
     // 3. Check quota
     const requestedPixels = BigInt(body.width) * BigInt(body.height);
-    const effectiveAvailable = dbWallet.totalQuota - dbWallet.lockedPixels;
+    const effectiveAvailable = dbWallet.totalQuota + dbWallet.bonusPixels - dbWallet.penaltyPixels - dbWallet.lockedPixels;
 
     if (effectiveAvailable < requestedPixels) {
       return reply.status(400).send({
@@ -135,7 +149,15 @@ const pixelRoutes: FastifyPluginAsync = async (app) => {
     return reply.status(201).send(area);
   });
 
-  app.delete<{ Params: { id: string } }>("/:id", async (req, reply) => {
+  // DELETE /api/pixel/:id — max 10 delete/min/IP
+  app.delete<{ Params: { id: string } }>("/:id", {
+    config: {
+      rateLimit: {
+        max: 10,
+        timeWindow: "1 minute",
+      },
+    },
+  }, async (req, reply) => {
     const { walletAddress, signature, message } = z.object({
       walletAddress: z.string(),
       signature: z.string(),
