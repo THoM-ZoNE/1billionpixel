@@ -24,7 +24,7 @@ const FAQS = [
   },
   {
   q: "Is my Telegram handle stored? (Data Notice)",
-  a: `If you voluntarily provide your Telegram username on the canvas page, it is stored in our database solely to send you quota alerts and notifications related to your pixel areas.
+  a: `If you voluntarily provide your Telegram username on the claim section, it is stored in our database solely to send you quota alerts and notifications related to your pixel areas.
 
 • The data is never shared with third parties.
 • It is not required to use the platform.
