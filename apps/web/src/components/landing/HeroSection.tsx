@@ -63,7 +63,7 @@ export function HeroSection() {
           </button>
         )}
         <a
-          href="https://pump.fun/coin/"
+          href="https://pump.fun/coin/FaWMZQd1JjNn74DxTvdtfeF3N6B3Z7wZRKfKeskqpump"
           target="_blank"
           rel="noopener noreferrer"
           onMouseEnter={() => setBuyHover(true)}

@@ -23,6 +23,14 @@ const FAQS = [
     a: "When your token balance no longer covers your full claimed area, the system scales your image down proportionally, anchored to its top-left corner. The freed space on the right and bottom becomes immediately available for others to claim. Your image stays intact — it just gets smaller.",
   },
   {
+    q: "Why do I need to connect my wallet?",
+    a: "Connecting your Solana wallet is how the platform identifies your token balance and determines how many pixels you are entitled to claim. Without a connected wallet, the system has no way to verify your $1BPX holdings or link a claimed area to your address. Your wallet is never asked to sign a transaction that moves funds — the connection is read-only for balance verification purposes during the claiming flow.",
+  },
+  {
+    q: "Is it safe to connect my wallet?",
+    a: "Yes. Connecting a wallet to 1BillionPixel.fun only allows the platform to read your public address and token balance — it does not give the site permission to move, spend, or approve any tokens. No transaction signature is requested during the standard claim process. You remain in full control of your funds at all times. As with any Web3 platform, always verify you are on the correct domain (1bpx.fun / 1billionpixel.fun) before connecting, and never share your seed phrase with anyone.",
+  },
+  {
   q: "Is my Telegram handle stored? (Data Notice)",
   a: `If you voluntarily provide your Telegram username on the claim section, it is stored in our database solely to send you quota alerts and notifications related to your pixel areas.
 
@@ -149,19 +157,22 @@ export default function FAQPage() {
               </button>
 
               {/* Answer */}
-              {open === i && (
-                <div style={{
-                  padding: "0 1.25rem 1.25rem",
-                  color: "rgba(255,255,255,0.55)",
-                  fontSize: "0.88rem", fontFamily: "monospace",
-                  lineHeight: 1.85,
-                  borderTop: "1px solid rgba(255,255,255,0.06)",
-                  paddingTop: "1rem",
-                  whiteSpace: "pre-line"
-                }}>
-                  {item.a}
-                </div>
-              )}
+            {open === i && (
+              <div style={{
+                padding: "0 1.25rem 1.25rem",
+                color: "rgba(255,255,255,0.55)",
+                fontSize: "0.88rem", fontFamily: "monospace",
+                lineHeight: 1.85,
+                borderTop: "1px solid rgba(255,255,255,0.06)",
+                paddingTop: "1rem",
+                whiteSpace: "pre-line"
+              }}
+                dangerouslySetInnerHTML={{
+                  __html: item.a
+                    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" style="color:#14f195;text-decoration:underline" target="_blank" rel="noopener noreferrer">$1</a>')
+                }}
+              />
+            )}
             </div>
           ))}
         </div>
@@ -212,7 +223,7 @@ export default function FAQPage() {
               X (Twitter) →
             </a>
             <a
-              href="https://coincommunities.org/communities/GPBcKYeGBBXraDn5Ne1hqT2T6KyUPGNZLnxBFNi8pump"
+              href="https://coincommunities.org/communities/FaWMZQd1JjNn74DxTvdtfeF3N6B3Z7wZRKfKeskqpump"
               target="_blank"
               rel="noopener noreferrer"
               style={{

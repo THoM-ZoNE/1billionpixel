@@ -58,7 +58,7 @@ export async function sendQuotaWarning(
     `❗ Deficit: <b>${Number(deficit).toLocaleString()} $1BPX</b>\n\n` +
     `You have <b>${graceHours} hour${graceHours !== 1 ? "s" : ""}</b> to buy back tokens.\n` +
     `If you don't, your areas will be proportionally resized.\n\n` +
-    `👉 <a href="https://pump.fun">Buy $1BPX on PumpFun</a>`;
+    `👉 <a href="https://pump.fun/coin/FaWMZQd1JjNn74DxTvdtfeF3N6B3Z7wZRKfKeskqpump">Buy $1BPX on PumpFun</a>`;
   return sendMessage(chatId, msg);
 }
 
@@ -79,7 +79,7 @@ export async function sendResizeNotification(
     `Your claimed areas have been proportionally reduced to match your ` +
     `current balance of <b>${Number(onChain).toLocaleString()} $1BPX</b>.\n\n` +
     `To restore your areas, send a message to support@1bpx.fun.\n\n` +
-    `👉 <a href="https://pump.fun">Buy $1BPX on PumpFun</a>`;
+    `👉 <a href="https://pump.fun/coin/FaWMZQd1JjNn74DxTvdtfeF3N6B3Z7wZRKfKeskqpump">Buy $1BPX on PumpFun</a>`;
   return sendMessage(chatId, msg);
 }
 // ── DM: Area released (too low balance for minimum size) ────────────────────────────────
@@ -100,7 +100,7 @@ export async function sendAreaReleasedNotification(
     `Your area at (${x}, ${y}) — <b>${width}×${height} px</b> — ` +
     `has been <b>released</b> because your token balance dropped below the ` +
     `minimum area size (100×100 px).\n\n` +
-    `👉 <a href="https://pump.fun/coin/GPBcKYeGBBXraDn5Ne1hqT2T6KyUPGNZLnxBFNi8pump">Buy $1BPX on PumpFun</a> to reclaim your spot.`;
+    `👉 <a href="https://pump.fun/coin/FaWMZQd1JjNn74DxTvdtfeF3N6B3Z7wZRKfKeskqpump">Buy $1BPX on PumpFun</a> to reclaim your spot.`;
 
   return sendMessage(chatId, msg);
 }
