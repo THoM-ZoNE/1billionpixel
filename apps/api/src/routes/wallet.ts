@@ -27,14 +27,15 @@ const walletRoutes: FastifyPluginAsync = async (app) => {
     // Important: BigInt fields must be converted to strings (JSON.stringify cannot handle BigInt)
     // availableQuota is always computed on-the-fly: totalQuota - lockedPixels
     // This avoids drift between stored DB values and reality
-    const effectiveAvailable = existing.availableQuota > 0n ? existing.availableQuota : 0n;
+    const raw = existing.totalQuota + existing.bonusPixels - existing.penaltyPixels - existing.lockedPixels;
+    const effectiveAvailable = raw > 0n ? raw : 0n;
 
 return reply.send({
   address:         existing.address,
   totalQuota:      existing.totalQuota.toString(),
   lockedPixels:    existing.lockedPixels.toString(),
   availableQuota:  effectiveAvailable.toString(),
-  bonusPixels:     existing.bonusPixels.toString(),   // ← hasznos a frontennek
+  bonusPixels:     existing.bonusPixels.toString(),   // ← hasznos a frontendnek
   gracePeriodEnd:  existing.gracePeriodEnd,
   lastSynced:      existing.lastSynced,
   createdAt:       existing.createdAt,
