@@ -223,7 +223,7 @@ export default function FAQPage() {
               X (Twitter) →
             </a>
             <a
-              href="https://coincommunities.org/communities/FaWMZQd1JjNn74DxTvdtfeF3N6B3Z7wZRKfKeskqpump"
+              href="https://coincommunities.org/communities/"
               target="_blank"
               rel="noopener noreferrer"
               style={{
